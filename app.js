@@ -7,9 +7,9 @@
 
 /* ★★★★★  จุดที่ต้องกรอกเอง (1 จุดเดียว)  ★★★★★
    วาง /exec URL ที่ได้จากการ Deploy backend (Apps Script) แทนข้อความ placeholder ด้านล่าง
-   ตัวอย่าง: const API_URL = 'https://script.google.com/macros/s/AKfycb..../exec';
+   ตัวอย่าง: const API_URL = 'https://script.google.com/macros/s/AKfycbyr_uhx0TrSeVd5fR3M_TVJbE_yiVg5xKq9GCG0m-H4BDKr5TxhBUQzGreNoZPNGV_m/exec';
 */
-const API_URL = 'https://script.google.com/macros/s/AKfycbyr_uhx0TrSeVd5fR3M_TVJbE_yiVg5xKq9GCG0m-H4BDKr5TxhBUQzGreNoZPNGV_m/exec';
+const API_URL = 'PASTE_WEBAPP_EXEC_URL_HERE';
 
 /* --- ค่าคงที่ระบบ --- */
 const API_PLACEHOLDER = 'PASTE_WEBAPP_EXEC_URL_HERE';
@@ -130,10 +130,22 @@ function initTheme(){
   setTheme(t);
 }
 function buildBars(){
+  let tabs = TABS.slice();
+  if(AUTH.user){
+    if(isIntake()) tabs.push({ id:'admin', t:'📊 จัดการงาน' });
+    tabs.push({ id:'assignee', t:'🗂️ งานของฉัน' });
+  }
   $('tabs').innerHTML =
-    TABS.map(x => `<button class="tab ${S.screen === x.id ? 'active' : ''} ${x.cta ? 'cta' : ''}" data-scr="${x.id}" ${S.screen === x.id ? 'aria-current="page"' : ''}>${x.t}</button>`).join('')
+    tabs.map(x => `<button class="tab ${S.screen === x.id ? 'active' : ''} ${x.cta ? 'cta' : ''}" data-scr="${x.id}" ${S.screen === x.id ? 'aria-current="page"' : ''}>${x.t}</button>`).join('')
     + `<button class="tab mode" id="mBtn" data-mode aria-label="สลับโหมดสว่าง/มืด">${S.theme === 'light' ? '🌙' : '☀️'}</button>`;
-  $('who').innerHTML = `<span class="rolepill">ผู้แจ้ง</span> ไม่ต้องเข้าสู่ระบบ — ส่งคำขอและติดตามได้เลย`;
+  const sl = $('staffLink');
+  if(AUTH.user){
+    $('who').innerHTML = `<span class="rolepill">${esc(roleLabel(AUTH.user.role))}</span> <b>${esc(AUTH.user.name || '')}</b> · เข้าสู่ระบบแล้ว`;
+    if(sl){ sl.textContent = 'ออกจากระบบ'; sl.removeAttribute('data-scr'); sl.setAttribute('data-act','logout'); }
+  }else{
+    $('who').innerHTML = `<span class="rolepill">ผู้แจ้ง</span> ไม่ต้องเข้าสู่ระบบ — ส่งคำขอและติดตามได้เลย`;
+    if(sl){ sl.textContent = '🔑 เจ้าหน้าที่'; sl.setAttribute('data-scr','staff'); sl.removeAttribute('data-act'); }
+  }
   if(CFG){
     if(CFG.system_title) $('brandTitle').textContent = CFG.system_title;
     if(CFG.subtitle) $('brandSub').textContent = CFG.subtitle;
@@ -150,21 +162,30 @@ function go(screen, extra){
 }
 function renderFromUrl(){
   const t = qsp().get('tab') || 'home';
-  S.screen = ['home','form','track','staff'].includes(t) ? t : 'home';
+  S.screen = ['home','form','track','staff','login','admin','assignee'].includes(t) ? t : 'home';
   render();
 }
 function render(){
+  // จัดการหน้าเจ้าหน้าที่ (WP3): alias 'staff' + guard สิทธิ์
+  if(S.screen === 'staff') S.screen = AUTH.user ? staffHome() : 'login';
+  if((S.screen === 'admin' || S.screen === 'assignee') && !AUTH.user) S.screen = 'login';
+  if(S.screen === 'admin' && AUTH.user && !isIntake()) S.screen = 'assignee';
   buildBars();
   const st = $('stage');
-  if(S.screen === 'home')       st.innerHTML = homeV();
-  else if(S.screen === 'form')  st.innerHTML = formV();
-  else if(S.screen === 'track') st.innerHTML = trackV();
-  else if(S.screen === 'staff') st.innerHTML = staffV();
-  else                          st.innerHTML = homeV();
+  if(S.screen === 'home')          st.innerHTML = homeV();
+  else if(S.screen === 'form')     st.innerHTML = formV();
+  else if(S.screen === 'track')    st.innerHTML = trackV();
+  else if(S.screen === 'login')    st.innerHTML = loginV();
+  else if(S.screen === 'admin')    st.innerHTML = adminV();
+  else if(S.screen === 'assignee') st.innerHTML = assigneeV();
+  else                             st.innerHTML = homeV();
   window.scrollTo(0, 0);
-  if(S.screen === 'home')  homeAfter();
-  if(S.screen === 'form')  formAfter();
-  if(S.screen === 'track') trackAfter();
+  if(S.screen === 'home')     homeAfter();
+  if(S.screen === 'form')     formAfter();
+  if(S.screen === 'track')    trackAfter();
+  if(S.screen === 'login')    loginAfter();
+  if(S.screen === 'admin')    adminAfter();
+  if(S.screen === 'assignee') assigneeAfter();
 }
 
 /* ============================================================
@@ -239,14 +260,275 @@ async function homeAfter(){
 }
 
 /* ============================================================
-   5) หน้า STAFF (placeholder — ทำจริงใน WP3)
+   5) โมดูลฝั่งเจ้าหน้าที่ (WP3): auth + login + admin + assignee
    ============================================================ */
-function staffV(){
-  return `<div style="max-width:460px;margin:26px auto"><div class="panel statecard" style="padding:34px 26px">
-    <div class="ico">🔑</div><h3>ส่วนเจ้าหน้าที่</h3>
-    <p>ระบบเข้าสู่ระบบเจ้าหน้าที่ (คิวรับเรื่อง · มอบหมายงาน · แดชบอร์ด) กำลังพัฒนาในเฟสถัดไป (WP3)</p>
-    <button class="btn ghost" data-scr="home">← กลับหน้าหลัก</button>
+let AUTH = { token:null, user:null };
+let STAFF_LIST = [];                 // cache สำหรับ dropdown มอบหมาย
+let LOGIN = { step:1, email:'', resendLeft:0, timer:null };
+let ADMIN = { queue:[], dash:null, workload:[] };
+let MYT = { rows:[] };
+
+function roleLabel(r){ return r==='admin'?'ผู้ดูแลระบบ':r==='moderator'?'ผู้กลั่นกรอง':r==='assignee'?'ผู้รับผิดชอบ':(r||''); }
+function isIntake(){ return !!(AUTH.user && (AUTH.user.role==='admin' || AUTH.user.role==='moderator')); }
+function staffHome(){ return isIntake() ? 'admin' : 'assignee'; }
+
+/* เรียก API แบบแนบ token + จับ session หมดอายุ */
+async function apiA(action, params){
+  try{ return await api(action, Object.assign({ token: AUTH.token }, params || {})); }
+  catch(err){
+    if(err && (err.error==='SESSION_EXPIRED' || err.error==='SESSION_INVALID')){ doLogout(true); throw { error:err.error, msg:'เซสชันหมดอายุ กรุณาเข้าสู่ระบบใหม่' }; }
+    throw err;
+  }
+}
+async function restoreSession(){
+  if(API_URL === API_PLACEHOLDER) return;
+  let tk = null; try{ tk = sessionStorage.getItem('sm_token'); }catch(e){}
+  if(!tk) return;
+  AUTH.token = tk;
+  try{ const d = await api('checkSession', { token: tk }); AUTH.user = d.user; buildBars(); if(['login','staff','home'].includes(S.screen)) go(staffHome()); }
+  catch(e){ AUTH.token=null; AUTH.user=null; try{ sessionStorage.removeItem('sm_token'); }catch(_){} }
+}
+function doLogout(silent){
+  const tk = AUTH.token;
+  AUTH.token=null; AUTH.user=null; STAFF_LIST=[];
+  try{ sessionStorage.removeItem('sm_token'); }catch(e){}
+  if(tk) api('logout', { token: tk }).catch(()=>{});
+  if(!silent) toast('ออกจากระบบแล้ว');
+  go('home');
+}
+
+/* ---------- LOGIN (OTP เจ้าหน้าที่) ---------- */
+function loginV(){
+  const s2 = LOGIN.step === 2;
+  return `<div style="max-width:420px;margin:26px auto"><div class="panel" style="padding:28px 24px">
+    <div class="statecard" style="padding:0 0 10px"><div class="ico">🔑</div><h3>เข้าสู่ระบบเจ้าหน้าที่</h3><p>ยืนยันตัวตนด้วยรหัส OTP ทางอีเมล</p></div>
+    <div class="field"><label class="fl" for="lgEmail">อีเมลเจ้าหน้าที่</label><input type="email" id="lgEmail" value="${esc(LOGIN.email)}" placeholder="you@yru.ac.th" ${s2?'disabled':''}></div>
+    ${s2 ? `<div class="field" style="margin-bottom:6px"><label class="fl">รหัส OTP (6 หลัก)</label><div class="otp-row" id="otpRow">${[0,1,2,3,4,5].map(i=>`<input maxlength="1" inputmode="numeric" autocomplete="one-time-code" aria-label="รหัสหลักที่ ${i+1}" data-i="${i}">`).join('')}</div></div>
+      <div class="help" style="text-align:center">ไม่ได้รับรหัส? <a href="#" id="resendLink" onclick="return loginResend()">ส่งใหม่</a></div>`:''}
+    <div class="msg err" id="lgErr" style="display:none"></div>
+    ${s2
+      ? `<div style="display:flex;gap:8px;margin-top:10px"><button class="btn ghost" onclick="loginBack()">← แก้อีเมล</button><button class="btn primary" style="flex:1" id="lgVerBtn" onclick="loginVerify()">ยืนยันเข้าสู่ระบบ</button></div>`
+      : `<button class="btn primary" style="width:100%" id="lgReqBtn" onclick="loginRequest()">ขอรหัส OTP</button>`}
+    <p class="help" style="margin-top:14px;text-align:center">ผู้แจ้งไม่ต้องเข้าสู่ระบบ · <a href="#" data-scr="home">กลับหน้าหลัก</a></p>
   </div></div>`;
+}
+function loginAfter(){ if(LOGIN.step === 2){ wireOtp(); startLoginResend(); } }
+function loginErr(msg){ const e=$('lgErr'); if(e){ e.style.display=''; e.textContent=msg; } }
+async function loginRequest(){
+  const em = $('lgEmail') ? $('lgEmail').value.trim() : '';
+  if(!em || em.indexOf('@') < 1){ loginErr('กรุณากรอกอีเมลให้ถูกต้อง'); return; }
+  const b=$('lgReqBtn'); b.disabled=true; b.innerHTML='<span class="spin"></span>กำลังส่ง...';
+  try{ await api('requestOtp', { email: em }); LOGIN.email = em; LOGIN.step = 2; render(); }
+  catch(err){ b.disabled=false; b.textContent='ขอรหัส OTP'; loginErr(err.msg || 'ขอรหัสไม่สำเร็จ (อีเมลนี้อาจไม่ใช่เจ้าหน้าที่)'); }
+}
+async function loginVerify(){
+  const otp = gatherOtp();
+  if(otp.length < 6){ loginErr('กรุณากรอกรหัส OTP ให้ครบ 6 หลัก'); return; }
+  const b=$('lgVerBtn'); b.disabled=true; b.innerHTML='<span class="spin"></span>กำลังตรวจสอบ...';
+  try{
+    const d = await api('verifyOtp', { email: LOGIN.email, otp });
+    AUTH.token = d.token; AUTH.user = d.user;
+    try{ sessionStorage.setItem('sm_token', d.token); }catch(e){}
+    stopLoginResend(); LOGIN = { step:1, email:'', resendLeft:0, timer:null };
+    toast('เข้าสู่ระบบสำเร็จ'); go(staffHome());
+  }catch(err){ b.disabled=false; b.textContent='ยืนยันเข้าสู่ระบบ'; loginErr(err.msg || 'รหัส OTP ไม่ถูกต้อง'); }
+}
+function loginBack(){ stopLoginResend(); LOGIN.step = 1; render(); }
+function startLoginResend(){ stopLoginResend(); LOGIN.resendLeft=60; updLoginResend(); LOGIN.timer=setInterval(()=>{ LOGIN.resendLeft--; if(LOGIN.resendLeft<=0) stopLoginResend(); updLoginResend(); },1000); }
+function stopLoginResend(){ if(LOGIN.timer){ clearInterval(LOGIN.timer); LOGIN.timer=null; } }
+function updLoginResend(){ const a=$('resendLink'); if(!a) return; if(LOGIN.resendLeft>0){ a.textContent=`ส่งใหม่ (0:${String(LOGIN.resendLeft).padStart(2,'0')})`; a.style.opacity='.5'; a.style.pointerEvents='none'; } else { a.textContent='ส่งรหัสใหม่'; a.style.opacity='1'; a.style.pointerEvents='auto'; } }
+async function loginResend(){ if(LOGIN.resendLeft>0) return false; try{ await api('requestOtp',{email:LOGIN.email}); toast('ส่งรหัสใหม่แล้ว'); startLoginResend(); }catch(err){ toast(err.msg||'ส่งใหม่ไม่สำเร็จ'); } return false; }
+
+/* ---------- ADMIN (คิว + แดชบอร์ด + ภาระงาน) ---------- */
+function statSkel(n){ let s=''; for(let i=0;i<n;i++) s+='<div class="panel"><div class="skel" style="height:56px"></div></div>'; return s; }
+function adminV(){
+  return `<div class="sec-head"><h2>คิวรับเรื่อง &amp; <b>แดชบอร์ด</b></h2><span class="rt" id="admUpd">กำลังโหลด…</span></div>
+    <div class="grid g4" id="admStats" style="margin-bottom:16px">${statSkel(4)}</div>
+    <div class="hero" style="grid-template-columns:1.4fr 1fr;align-items:start;margin-bottom:0">
+      <div id="admQueue">${loadingCard('กำลังโหลดคิว')}</div>
+      <div id="admSide"></div>
+    </div>`;
+}
+async function adminAfter(){
+  try{
+    const [q, dash, wl] = await Promise.all([ apiA('queue',{page:1,page_size:50}), apiA('dashboard'), apiA('workload') ]);
+    ADMIN.queue = q.rows||[]; ADMIN.dash = dash; ADMIN.workload = wl||[];
+    if(!$('admStats')) return;
+    renderAdminStats(dash); renderAdminQueue(ADMIN.queue); renderAdminSide(dash, ADMIN.workload);
+    if($('admUpd')) $('admUpd').textContent = 'อัปเดต ' + fmtDate(new Date().toISOString(), true);
+    drawTypeChart(dash);
+  }catch(err){ if($('admQueue')) $('admQueue').innerHTML = errorCard(err.msg, "go('admin')"); }
+}
+function renderAdminStats(d){
+  const bs=(d&&d.by_status)||{};
+  const nNew=(bs.NEW||0), nRet=(bs.RETURNED_INTAKE||0), nProg=(bs.PROGRESS||0)+(bs.ASSIGNED||0)+(bs.REVISION||0), nCl=(bs.CLOSED||0);
+  const ov=(d&&d.sla&&d.sla.overdue)||0;
+  if(!$('admStats')) return;
+  $('admStats').innerHTML=`
+   <div class="panel stat lift"><div class="num">${nNew}</div><div class="lbl">🆕 รอคัดกรอง</div><span class="chip c-amber" style="margin-top:8px">ต้องจัดการ</span></div>
+   <div class="panel stat lift"><div class="num">${nProg}</div><div class="lbl">⚙️ กำลังดำเนินการ</div><span class="chip c-blue" style="margin-top:8px">ในมือทีม</span></div>
+   <div class="panel stat lift"><div class="num">${nRet}</div><div class="lbl">↩️ ส่งกลับให้แก้</div><span class="chip c-red" style="margin-top:8px">รอผู้แจ้ง</span></div>
+   <div class="panel stat lift"><div class="num">${nCl}</div><div class="lbl">✅ ปิดงานแล้ว</div><span class="chip ${ov?'c-red':'c-green'}" style="margin-top:8px">${ov?('⏰ เกินกำหนด '+ov):'สะสม'}</span></div>`;
+}
+function priBorder(p){ return p==='red'?'var(--heat-bad)':p==='yellow'?'var(--heat-warn)':p==='green'?'var(--heat-ok)':'var(--line)'; }
+function renderAdminQueue(rows){
+  const el=$('admQueue'); if(!el) return;
+  const head=`<div class="sec-head" style="margin-bottom:10px"><h2 style="font-size:16px">🆕 คิวรับเรื่อง</h2><span class="rt">เรียงตามความด่วน → อายุงาน</span></div>`;
+  if(!rows.length){ el.innerHTML=`<div class="panel">${head}<div class="statecard" style="padding:30px"><div class="ico">📭</div><h3>คิวว่าง</h3><p>ยังไม่มีคำขอใหม่รอคัดกรอง</p></div></div>`; return; }
+  el.innerHTML=`<div class="panel">${head}
+    ${rows.map(t=>`<div class="panel task lift" style="margin-bottom:9px;border-left:5px solid ${priBorder(t.priority)}"><div>
+      <div class="nm">${pdot(t.priority)} ${esc(t.ticket_no)} — ${esc(t.subject||'')}</div>
+      <div class="mt">${esc(t.requester_name||'')} · ${esc(t.type||'')}${t.subtype?' › '+esc(t.subtype):''}</div>
+      <div style="margin-top:8px;display:flex;gap:6px;flex-wrap:wrap"><button class="btn primary sm" onclick="openTicket('${esc(t.ticket_no)}')">คัดกรอง / มอบหมาย</button><button class="btn warn sm" onclick="openReturn('${esc(t.ticket_no)}','intake')">↩️ ตีกลับ</button></div>
+    </div><div class="side">${badge(t.status)}<span class="chip ${t.status==='RETURNED_INTAKE'?'c-red':'c-amber'}">⏱ ${t.deadline?fmtDate(t.deadline):'-'}</span></div></div>`).join('')}
+    <div style="margin-top:8px"><button class="btn ghost sm" onclick="doExportCsv()">⬇️ ส่งออก CSV</button></div>
+  </div>`;
+}
+function renderAdminSide(d, wl){
+  const el=$('admSide'); if(!el) return;
+  const maxOpen=Math.max(1, ...(wl.length?wl.map(w=>w.open||0):[1]));
+  const sat=(d&&d.satisfaction)||{};
+  el.innerHTML=`<div class="panel"><h3 style="font-size:15px">👥 ภาระงานเจ้าหน้าที่</h3>
+    ${wl.length?wl.map(w=>`<div class="wl"><span class="nm">${esc(w.name||w.email||'')}</span><span class="pbar" style="flex:1"><i style="width:${Math.round((w.open||0)*100/maxOpen)}%"></i></span><span class="cnt">${w.open||0}</span></div>`).join(''):'<p class="help">ยังไม่มีข้อมูลภาระงาน</p>'}
+  </div>
+  <div class="panel" style="margin-top:14px"><h3 style="font-size:15px">📈 งานตามประเภท</h3><canvas id="admChart" height="150"></canvas>
+    <div class="grid g2" style="gap:8px;margin-top:10px"><div class="panel stat" style="padding:12px"><div class="num" style="font-size:19px">${sat.avg!=null&&sat.count?Number(sat.avg).toFixed(1)+'/5':'—'}</div><div class="lbl">ความพึงพอใจ (ISO 10002)</div></div><div class="panel stat" style="padding:12px"><div class="num" style="font-size:19px">${(d&&d.open_total)||0}</div><div class="lbl">งานที่เปิดอยู่</div></div></div>
+  </div>`;
+}
+function drawTypeChart(d){
+  const el=$('admChart'); if(!el || !window.Chart) return;
+  const bt=(d&&d.by_type)||{}; const labels=Object.keys(bt); const data=labels.map(k=>bt[k]);
+  const cs=getComputedStyle(document.documentElement);
+  try{ new Chart(el,{type:'bar',data:{labels:labels.length?labels:['—'],datasets:[{data:data.length?data:[0],backgroundColor:(cs.getPropertyValue('--green2').trim()||'#2e9e6b'),borderRadius:6}]},options:{plugins:{legend:{display:false}},scales:{y:{beginAtZero:true,ticks:{stepSize:1}}}}}); }catch(e){}
+}
+async function doExportCsv(){
+  try{
+    const d=await apiA('exportCsv');
+    const bin=atob(d.base64||''); const bytes=new Uint8Array(bin.length);
+    for(let i=0;i<bin.length;i++) bytes[i]=bin.charCodeAt(i);
+    const blob=new Blob([bytes],{type:d.mime||'text/csv'});
+    const url=URL.createObjectURL(blob); const a=document.createElement('a'); a.href=url; a.download=d.filename||'tickets.csv'; document.body.appendChild(a); a.click(); a.remove(); URL.revokeObjectURL(url);
+  }catch(err){ toast(err.msg||'ส่งออก CSV ไม่สำเร็จ'); }
+}
+
+/* ---------- ASSIGNEE (งานของฉัน) ---------- */
+function assigneeV(){
+  return `<div class="sec-head"><h2>งาน<b>ของฉัน</b></h2><span class="rt" id="mytRt">กำลังโหลด…</span></div><div id="mytList">${loadingCard('กำลังโหลดงานของฉัน')}</div>`;
+}
+async function assigneeAfter(){
+  try{
+    const r = await apiA('myTickets', { page:1, page_size:100 });
+    MYT.rows = r.rows||[];
+    if(!$('mytList')) return;
+    renderMyTickets(MYT.rows);
+    if($('mytRt')) $('mytRt').textContent = `${esc(AUTH.user?AUTH.user.name:'')} · ${MYT.rows.length} งานที่กำลังดูแล`;
+  }catch(err){ if($('mytList')) $('mytList').innerHTML = errorCard(err.msg, "go('assignee')"); }
+}
+function renderMyTickets(rows){
+  const el=$('mytList'); if(!el) return;
+  if(!rows.length){ el.innerHTML=`<div class="panel statecard"><div class="ico">🎉</div><h3>ไม่มีงานค้าง</h3><p>เยี่ยมมาก! งานของคุณเคลียร์หมดแล้ว</p></div>`; return; }
+  el.innerHTML=rows.map(t=>{
+    const overdue = t.sla && t.sla.state==='overdue';
+    return `<div class="panel allrow lift" onclick="openTicket('${esc(t.ticket_no)}')">
+      <span>${pdot(t.priority)}</span>
+      <div><div class="nm" style="font-weight:600;font-size:13.5px">${esc(t.ticket_no)} — ${esc(t.subject||'')}</div><div class="mt" style="color:var(--ink3);font-size:12px">${esc(t.type||'')}${t.subtype?' › '+esc(t.subtype):''} · ${esc(t.requester_name||'')}</div></div>
+      <div style="text-align:right">${badge(t.status)}<div class="mt" style="color:var(--ink3);font-size:12px;margin-top:4px">⏱ ${t.deadline?fmtDate(t.deadline):'-'}${overdue?' · <span style="color:var(--red);font-weight:700">เลยกำหนด</span>':''}</div></div>
+    </div>`;
+  }).join('');
+}
+
+/* ---------- รายละเอียด ticket + การกระทำ ---------- */
+async function openTicket(no){
+  openM(`<div class="mh"><h3>${esc(no)}</h3><button class="mx" onclick="closeM()">✕</button></div><div class="mb">${loadingCard('กำลังโหลดรายละเอียด')}</div>`);
+  try{
+    const d = await apiA('ticketDetail', { ticket_no: no });
+    if(isIntake() && !STAFF_LIST.length){ try{ STAFF_LIST = await apiA('listStaff') || []; }catch(e){} }
+    renderTicketModal(d);
+  }catch(err){ openM(`<div class="mh"><h3>${esc(no)}</h3><button class="mx" onclick="closeM()">✕</button></div><div class="mb"><div class="msg err">${esc(err.msg||'โหลดรายละเอียดไม่สำเร็จ')}</div></div>`); }
+}
+function refreshStaff(){ if(S.screen==='admin') adminAfter(); else if(S.screen==='assignee') assigneeAfter(); }
+function renderTicketModal(d){
+  const t=d.ticket||{}; const st=t.status; const open=!['CLOSED','CANCELLED'].includes(st);
+  const assignees=(STAFF_LIST||[]).filter(s=>s.active!==false);
+  let assignBlock='';
+  if(isIntake() && open){
+    assignBlock=`<div style="border-top:1px solid var(--line);padding-top:12px;margin-top:12px">
+      <label class="fl">ระดับความด่วน (Impact × Urgency — ITIL)</label>
+      <div class="segbtns" id="mPri">${['red','yellow','green'].map(p=>`<span class="sb ${t.priority===p?'on':''}" data-p="${p}" onclick="this.parentNode.querySelectorAll('.sb').forEach(x=>x.classList.remove('on'));this.classList.add('on')">${esc(priLabel(p)||p)}</span>`).join('')}</div>
+      <div class="field" style="margin-top:12px"><label class="fl" for="mAssignee">มอบหมายให้</label><select id="mAssignee"><option value="">— เลือกเจ้าหน้าที่ —</option>${assignees.map(s=>`<option value="${esc(s.email)}" ${t.assignee_email===s.email?'selected':''}>${esc(s.name||s.email)}${s.role?' ('+esc(roleLabel(s.role))+')':''}</option>`).join('')}</select></div>
+      <div class="msg err" id="aErr" style="display:none"></div>
+      <button class="btn primary sm" id="aBtn" onclick="doAssign('${esc(t.ticket_no)}')">✔️ มอบหมาย / ปรับความด่วน</button>
+    </div>`;
+  }
+  let btns=[];
+  if(st==='ASSIGNED') btns.push(`<button class="btn ghost sm" onclick="doStart('${esc(t.ticket_no)}')">▶️ เริ่มงาน</button>`);
+  if(st==='PROGRESS') btns.push(`<button class="btn ghost sm" onclick="openReturn('${esc(t.ticket_no)}','revision')">↩️ ส่งกลับให้ตรวจ</button>`);
+  if(st==='PROGRESS'||st==='REVISION') btns.push(`<button class="btn primary sm" onclick="openClose('${esc(t.ticket_no)}')">✅ ปิดงาน</button>`);
+  if(isIntake() && (st==='NEW'||st==='RETURNED_INTAKE')) btns.push(`<button class="btn warn sm" onclick="openReturn('${esc(t.ticket_no)}','intake')">↩️ ตีกลับให้แก้</button>`);
+  if(isIntake() && open) btns.push(`<button class="btn warn sm" onclick="openReturn('${esc(t.ticket_no)}','cancel')">✖️ ยกเลิก</button>`);
+  const body=`<div class="mh">${pdot(t.priority)}<h3>${esc(t.ticket_no)}</h3>${badge(st)}<button class="mx" onclick="closeM()">✕</button></div>
+   <div class="mb"><p style="font-weight:600;font-size:15px">${esc(t.subject||'')}</p>
+   <div class="kv2"><b>ผู้แจ้ง</b><span>${esc(t.requester_name||'')}${t.requester_email?' · '+esc(t.requester_email):''}</span><b>ประเภท</b><span>${esc(t.type||'')}${t.subtype?' › '+esc(t.subtype):''}</span><b>ยื่นเมื่อ</b><span>${fmtDate(t.created_at,true)}</span><b>กำหนดส่ง</b><span>${t.deadline?fmtDate(t.deadline):'—'}</span><b>ผู้รับผิดชอบ</b><span>${esc(t.assignee_name||'— ยังไม่มอบหมาย —')}</span>${t.sla&&t.sla.label?`<b>SLA</b><span>${esc(t.sla.label)}</span>`:''}</div>
+   ${t.note?`<div class="msg info" style="white-space:pre-wrap">📝 ${esc(t.note)}</div>`:''}
+   ${t.last_return_reason&&(st==='RETURNED_INTAKE'||st==='REVISION')?`<div class="msg warn">📌 ${esc(t.last_return_reason)}</div>`:''}
+   ${assignBlock}
+   ${btns.length?`<div style="display:flex;gap:7px;flex-wrap:wrap;margin-top:12px">${btns.join('')}</div>`:''}
+   <div style="border-top:1px solid var(--line);margin-top:14px;padding-top:10px"><label class="fl" for="cmtText">เพิ่มความเห็น (บันทึกภายในทีม)</label><textarea id="cmtText" placeholder="บันทึกภายใน ไม่แสดงแก่ผู้แจ้ง"></textarea><button class="btn ghost sm" id="cmtBtn" style="margin-top:6px" onclick="doComment('${esc(t.ticket_no)}')">💬 บันทึกความเห็น</button></div>
+   <h4 style="margin:14px 0 8px;font-size:15px">ประวัติการดำเนินการ</h4>${timelineHtml(d.timeline||[])}
+   ${attachHtml(d.attachments||[])}
+   </div>`;
+  openM(body);
+}
+async function doAssign(no){
+  const sel=$('mAssignee'); const email=sel?sel.value:'';
+  const e=$('aErr'); if(e) e.style.display='none';
+  if(!email){ if(e){ e.style.display=''; e.textContent='กรุณาเลือกเจ้าหน้าที่'; } return; }
+  const pr=document.querySelector('#mPri .sb.on'); const priority=pr?pr.dataset.p:undefined;
+  const b=$('aBtn'); b.disabled=true; b.innerHTML='<span class="spin"></span>กำลังบันทึก...';
+  try{ await apiA('assign',{ ticket_no:no, assignee_email:email, priority }); closeM(); toast('มอบหมายงานแล้ว'); refreshStaff(); }
+  catch(err){ b.disabled=false; b.textContent='✔️ มอบหมาย / ปรับความด่วน'; if(e){ e.style.display=''; e.textContent=err.msg||'มอบหมายไม่สำเร็จ'; } }
+}
+async function doStart(no){ try{ await apiA('start',{ticket_no:no}); toast('เริ่มดำเนินการแล้ว'); openTicket(no); refreshStaff(); }catch(err){ toast(err.msg||'ไม่สำเร็จ'); } }
+async function doComment(no){
+  const t=$('cmtText')?$('cmtText').value.trim():''; if(!t){ toast('กรุณาพิมพ์ความเห็นก่อน'); return; }
+  const b=$('cmtBtn'); b.disabled=true; b.innerHTML='<span class="spin"></span>...';
+  try{ await apiA('addComment',{ticket_no:no,text:t}); toast('บันทึกความเห็นแล้ว'); openTicket(no); }
+  catch(err){ b.disabled=false; b.textContent='💬 บันทึกความเห็น'; toast(err.msg||'ไม่สำเร็จ'); }
+}
+function openReturn(no, stage){
+  const titles={ intake:'↩️ ตีกลับให้แก้ไข (ชั้นคัดกรอง)', revision:'↩️ ส่งกลับให้ตรวจ/แก้ร่าง', cancel:'✖️ ยกเลิกคำขอ' };
+  const desc={ intake:'ส่งกลับให้ <b>ผู้แจ้ง</b> แก้/เพิ่มข้อมูลก่อนรับเข้าดำเนินการ', revision:'ส่งร่างกลับให้ <b>ผู้แจ้ง</b> ตรวจ/แก้ไข (วนได้หลายรอบ)', cancel:'ยกเลิกคำขอนี้ (ระบบบันทึกเหตุผลไว้)' };
+  const isC=stage==='cancel';
+  openM(`<div class="mh"><h3>${titles[stage]}</h3><button class="mx" onclick="closeM()">✕</button></div>
+   <div class="mb"><div class="msg ${stage==='revision'?'info':'warn'}">${esc(no)} — ${desc[stage]}</div>
+   <div class="field"><label class="fl" for="rReason">${isC?'เหตุผลการยกเลิก':'เหตุผล / สิ่งที่ต้องแก้'} <span class="req">*</span></label><textarea id="rReason" placeholder="ระบุรายละเอียด เช่น กรุณาแนบไฟล์รายชื่อให้ครบ / ตรวจยอดเงินอีกครั้ง"></textarea></div>
+   <div class="msg err" id="rErr" style="display:none"></div>
+   <div class="help">ระบบส่งอีเมลแจ้งผู้แจ้ง + ลิงก์แก้ไข และบันทึกประวัติ (ไม่ต้องเปิดเรื่องใหม่)</div>
+   <div style="margin-top:12px"><button class="btn ${isC?'warn':'primary'}" id="rBtn" onclick="doReturn('${esc(no)}','${stage}')">ยืนยัน</button></div></div>`);
+}
+async function doReturn(no, stage){
+  const reason=$('rReason')?$('rReason').value.trim():'';
+  const e=$('rErr'); if(e) e.style.display='none';
+  if(!reason){ if(e){ e.style.display=''; e.textContent='กรุณาระบุเหตุผล'; } return; }
+  const map={ intake:['returnIntake',{ticket_no:no,reason}], revision:['returnRevision',{ticket_no:no,reason}], cancel:['cancel',{ticket_no:no,reason}] };
+  const b=$('rBtn'); b.disabled=true; b.innerHTML='<span class="spin"></span>กำลังส่ง...';
+  try{ await apiA(map[stage][0], map[stage][1]); closeM(); toast('ดำเนินการเรียบร้อยแล้ว'); refreshStaff(); }
+  catch(err){ b.disabled=false; b.textContent='ยืนยัน'; if(e){ e.style.display=''; e.textContent=err.msg||'ไม่สำเร็จ'; } }
+}
+function openClose(no){
+  openM(`<div class="mh"><h3>✅ ปิดงาน</h3><button class="mx" onclick="closeM()">✕</button></div>
+   <div class="mb"><div class="msg ok">${esc(no)} — สรุปผลการดำเนินงานก่อนปิด (ระบบส่งอีเมลเชิญประเมินให้ผู้แจ้ง)</div>
+   <div class="field"><label class="fl" for="cNote">สรุปการปิดงาน <span class="req">*</span></label><textarea id="cNote" placeholder="เช่น จัดทำหนังสือเสร็จ ส่งไฟล์ให้ผู้แจ้งแล้ว"></textarea></div>
+   <div class="msg err" id="cErr" style="display:none"></div>
+   <button class="btn primary" id="cBtn" onclick="doClose('${esc(no)}')">ยืนยันปิดงาน</button></div>`);
+}
+async function doClose(no){
+  const note=$('cNote')?$('cNote').value.trim():'';
+  const e=$('cErr'); if(e) e.style.display='none';
+  if(!note){ if(e){ e.style.display=''; e.textContent='กรุณากรอกสรุปการปิดงาน'; } return; }
+  const b=$('cBtn'); b.disabled=true; b.innerHTML='<span class="spin"></span>กำลังปิดงาน...';
+  try{ await apiA('close',{ticket_no:no,closing_note:note}); closeM(); toast('ปิดงานเรียบร้อยแล้ว'); refreshStaff(); }
+  catch(err){ b.disabled=false; b.textContent='ยืนยันปิดงาน'; if(e){ e.style.display=''; e.textContent=err.msg||'ปิดงานไม่สำเร็จ'; } }
 }
 
 /* ============================================================
@@ -745,6 +1027,8 @@ function boot(){
   document.addEventListener('keydown', e=>{ if(e.key === 'Escape') closeM(); });
   // เมนู/ปุ่มนำทาง (delegation)
   document.addEventListener('click', e=>{
+    const act = e.target.closest('[data-act="logout"]');
+    if(act){ e.preventDefault(); doLogout(); return; }
     const nav = e.target.closest('[data-scr]');
     if(nav){ e.preventDefault(); const scr = nav.dataset.scr; if(scr === 'form' && FORM.step === 3) FORM = newForm(); go(scr); return; }
     const mode = e.target.closest('[data-mode]');
@@ -756,6 +1040,7 @@ function boot(){
   }
   renderFromUrl();   // แสดง shell ทันที (หน้า home เปิดดูได้แม้ backend ยังไม่ deploy)
   loadConfig();      // แล้วโหลด config/requesters/types (async — ไม่บล็อกการแสดงผล)
+  restoreSession();  // กู้ session เจ้าหน้าที่ถ้ามี token เดิม (async)
 }
 boot();   // index.html โหลด app.js แบบ defer → DOM พร้อมแล้ว เรียก boot ได้เลย
 
