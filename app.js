@@ -9,7 +9,7 @@
    วาง /exec URL ที่ได้จากการ Deploy backend (Apps Script) แทนข้อความ placeholder ด้านล่าง
    ตัวอย่าง: const API_URL = 'https://script.google.com/macros/s/AKfycbyr_uhx0TrSeVd5fR3M_TVJbE_yiVg5xKq9GCG0m-H4BDKr5TxhBUQzGreNoZPNGV_m/exec';
 */
-const API_URL = 'PASTE_WEBAPP_EXEC_URL_HERE';
+const API_URL = 'https://script.google.com/macros/s/AKfycbyr_uhx0TrSeVd5fR3M_TVJbE_yiVg5xKq9GCG0m-H4BDKr5TxhBUQzGreNoZPNGV_m/exec';
 
 /* --- ค่าคงที่ระบบ --- */
 const API_PLACEHOLDER = 'PASTE_WEBAPP_EXEC_URL_HERE';
