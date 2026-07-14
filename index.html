@@ -1,0 +1,49 @@
+<!DOCTYPE html>
+<html lang="th" data-theme="light">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>SRDI-Service Mind — ระบบรับบริการงานบริหารทั่วไป</title>
+<meta name="description" content="ยื่นคำขอและติดตามงานบริการของงานบริหารทั่วไป สถาบันวิจัยและพัฒนาชายแดนภาคใต้ มหาวิทยาลัยราชภัฏยะลา — จัดทำหนังสือราชการและงานบริการอื่น ๆ แนบไฟล์ ยืนยัน OTP ติดตามทุกสถานะ">
+<meta name="color-scheme" content="light dark">
+<link rel="icon" type="image/png" href="assets/srdi_logo.png">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Prompt:wght@400;500;600;700;800&family=Anuphan:wght@400;500;600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="styles.css">
+<!-- Chart.js สำหรับแดชบอร์ดฝั่งเจ้าหน้าที่ (WP3) -->
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js" defer></script>
+</head>
+<body>
+<!-- แบนเนอร์ระดับหน้า (แสดงเมื่อยังไม่ตั้งค่า API_URL หรือมีปัญหาการเชื่อมต่อ) -->
+<div id="appBanner" class="app-banner" style="display:none" role="alert"></div>
+
+<!-- แถบบน: โลโก้จริง + ชื่อระบบ (เติมจาก config) + เมนู (เติมจาก JS) -->
+<header class="topbar">
+  <div class="wrap">
+    <button class="brand" id="brand" data-scr="home" aria-label="ไปหน้าหลัก">
+      <img class="logo-img" src="assets/srdi_logo.png" alt="โลโก้ สถาบันวิจัยและพัฒนาชายแดนภาคใต้ มหาวิทยาลัยราชภัฏยะลา">
+      <span class="btxt"><b id="brandTitle">SRDI-Service Mind</b><span id="brandSub">งานบริหารทั่วไป สวพ.ชต.</span></span>
+    </button>
+    <div class="spacer"></div>
+    <nav class="tabs" id="tabs" aria-label="เมนูหลัก"></nav>
+  </div>
+</header>
+
+<!-- แถบผู้ใช้: ผู้แจ้งไม่ต้องเข้าสู่ระบบ + ทางเข้าเจ้าหน้าที่ -->
+<div class="userbar"><div class="wrap">
+  <div class="who" id="who"></div>
+  <button class="linkbtn" id="staffLink" data-scr="staff">🔑 เจ้าหน้าที่</button>
+</div></div>
+
+<!-- เนื้อหาหลัก (JS render ตาม tab) -->
+<main><div class="wrap" id="stage" aria-live="polite"></div></main>
+
+<footer class="foot"><div class="wrap">SRDI-Service Mind · สถาบันวิจัยและพัฒนาชายแดนภาคใต้ มหาวิทยาลัยราชภัฏยะลา · อิงมาตรฐาน ITIL 4 · ISO 10002 · WCAG 2.2</div></footer>
+
+<!-- modal กลาง -->
+<div class="overlay" id="ov"><div class="modal" id="modal" role="dialog" aria-modal="true" aria-label="กล่องโต้ตอบ"></div></div>
+
+<script src="app.js" defer></script>
+</body>
+</html>
