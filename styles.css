@@ -157,6 +157,25 @@ html[data-theme=dark] .pbar i{background:linear-gradient(90deg,#b8f09e,#4ade80)}
 .rrow{display:flex;justify-content:space-between;gap:14px;padding:9px 0;border-bottom:1px dashed var(--line);font-size:13.5px}
 .rrow:last-child{border:none}.rrow span{color:var(--ink3)}
 
+/* ---- ★ SM-D34 "งานทั้งหมด": ตาราง 6 คอลัมน์ (ต่อยอด .allrow) + แถบกรอง ----
+   ใช้ตัวแปรสีเดิมทั้งหมด — ไม่แตะ design tokens (SM-D26) */
+.allhead,.allrow.cols{grid-template-columns:auto minmax(0,2.2fr) minmax(0,1fr) minmax(0,1.2fr) minmax(0,1fr) auto}
+.allhead{display:grid;gap:12px;padding:2px 16px 8px;font-size:11.5px;font-weight:700;color:var(--ink3)}
+.allrow .c-sub{font-size:11.5px;color:var(--ink3);margin-top:2px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.allrow .c-txt{font-size:12.5px;color:var(--ink2);min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.allrow .c-due{font-size:12px;color:var(--ink3);margin-top:4px;white-space:nowrap}
+.allfilters{display:grid;grid-template-columns:repeat(auto-fit,minmax(178px,1fr));gap:11px;align-items:end}
+.allpager{display:flex;align-items:center;gap:9px;flex-wrap:wrap;margin-top:12px;padding-top:12px;border-top:1px solid var(--line)}
+.allpager .info{font-size:12.5px;color:var(--ink3);margin-right:auto}
+/* จอแคบ: ยุบเป็น 2 คอลัมน์ (จุดสีด้านซ้ายคร่อมทุกบรรทัด) + ซ่อนหัวตาราง */
+@media(max-width:900px){
+  .allhead{display:none}
+  .allrow.cols{grid-template-columns:auto minmax(0,1fr);row-gap:3px}
+  .allrow.cols .c-dot{grid-row:1 / -1;align-self:start;padding-top:4px}
+  .allrow.cols .c-side{text-align:left!important}
+  .allrow .c-txt,.allrow .c-sub{white-space:normal}
+}
+
 /* ---- timeline (ประวัติการดำเนินการ) ---- */
 .tl{list-style:none;margin:0;padding:0}
 .tl li{position:relative;padding:0 0 18px 26px;border-left:2px solid var(--line)}.tl li:last-child{border-left-color:transparent}
