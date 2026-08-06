@@ -7,13 +7,13 @@
 
 /* ★★★★★  จุดที่ต้องกรอกเอง (1 จุดเดียว)  ★★★★★
    วาง /exec URL ที่ได้จากการ Deploy backend (Apps Script) แทนข้อความ placeholder ด้านล่าง
-   ตัวอย่าง: const API_URL = 'https://script.google.com/macros/s/AKfycbwPaN1CtgAOKD4tK6WPPT8dAhTdbtorUYIC8D5Ws3ZaLlTPjiSbkqaxMrDgPkWI_zpIuQ/exec';
+   ตัวอย่าง: const API_URL = 'https://script.google.com/macros/s/AKfycbyr_uhx0TrSeVd5fR3M_TVJbE_yiVg5xKq9GCG0m-H4BDKr5TxhBUQzGreNoZPNGV_m/exec';
 */
-const API_URL = 'https://script.google.com/macros/s/AKfycbwPaN1CtgAOKD4tK6WPPT8dAhTdbtorUYIC8D5Ws3ZaLlTPjiSbkqaxMrDgPkWI_zpIuQ/exec';
+const API_URL = 'PASTE_WEBAPP_EXEC_URL_HERE';
 
 /* --- ค่าคงที่ระบบ --- */
 const API_PLACEHOLDER = 'PASTE_WEBAPP_EXEC_URL_HERE';
-const API_TIMEOUT_MS = 60000;               // หมดเวลาเชื่อมต่อ 30 วินาที (ตรงกับ mockup)
+const API_TIMEOUT_MS = 30000;               // หมดเวลาเชื่อมต่อ 30 วินาที (ตรงกับ mockup)
 const TABS = [
   { id:'home',  t:'หน้าหลัก' },
   { id:'form',  t:'📝 ยื่นคำขอ', cta:1 },
@@ -132,7 +132,10 @@ function initTheme(){
 function buildBars(){
   let tabs = TABS.slice();
   if(AUTH.user){
-    if(isIntake()) tabs.push({ id:'admin', t:'📊 จัดการงาน' });
+    if(isIntake()){
+      tabs.push({ id:'admin', t:'📊 จัดการงาน' });
+      tabs.push({ id:'alltickets', t:'📋 งานทั้งหมด' });   // ★ SM-D34 (เฉพาะ admin/moderator)
+    }
     tabs.push({ id:'assignee', t:'🗂️ งานของฉัน' });
   }
   $('tabs').innerHTML =
@@ -162,30 +165,34 @@ function go(screen, extra){
 }
 function renderFromUrl(){
   const t = qsp().get('tab') || 'home';
-  S.screen = ['home','form','track','staff','login','admin','assignee'].includes(t) ? t : 'home';
+  S.screen = ['home','form','track','staff','login','admin','assignee','alltickets'].includes(t) ? t : 'home';
+  // ★ SM-D34: URL เป็นแหล่งความจริงของตัวกรองเมื่อเข้าจากลิงก์/ปุ่มย้อนกลับ (?tab=alltickets&status=NEW)
+  if(S.screen === 'alltickets'){ allResetFilters(); ALLT.f.status = qsp().get('status') || ''; }
   render();
 }
 function render(){
   // จัดการหน้าเจ้าหน้าที่ (WP3): alias 'staff' + guard สิทธิ์
   if(S.screen === 'staff') S.screen = AUTH.user ? staffHome() : 'login';
-  if((S.screen === 'admin' || S.screen === 'assignee') && !AUTH.user) S.screen = 'login';
-  if(S.screen === 'admin' && AUTH.user && !isIntake()) S.screen = 'assignee';
+  if((S.screen === 'admin' || S.screen === 'assignee' || S.screen === 'alltickets') && !AUTH.user) S.screen = 'login';
+  if((S.screen === 'admin' || S.screen === 'alltickets') && AUTH.user && !isIntake()) S.screen = 'assignee';
   buildBars();
   const st = $('stage');
-  if(S.screen === 'home')          st.innerHTML = homeV();
-  else if(S.screen === 'form')     st.innerHTML = formV();
-  else if(S.screen === 'track')    st.innerHTML = trackV();
-  else if(S.screen === 'login')    st.innerHTML = loginV();
-  else if(S.screen === 'admin')    st.innerHTML = adminV();
-  else if(S.screen === 'assignee') st.innerHTML = assigneeV();
-  else                             st.innerHTML = homeV();
+  if(S.screen === 'home')            st.innerHTML = homeV();
+  else if(S.screen === 'form')       st.innerHTML = formV();
+  else if(S.screen === 'track')      st.innerHTML = trackV();
+  else if(S.screen === 'login')      st.innerHTML = loginV();
+  else if(S.screen === 'admin')      st.innerHTML = adminV();
+  else if(S.screen === 'alltickets') st.innerHTML = allTicketsV();
+  else if(S.screen === 'assignee')   st.innerHTML = assigneeV();
+  else                               st.innerHTML = homeV();
   window.scrollTo(0, 0);
-  if(S.screen === 'home')     homeAfter();
-  if(S.screen === 'form')     formAfter();
-  if(S.screen === 'track')    trackAfter();
-  if(S.screen === 'login')    loginAfter();
-  if(S.screen === 'admin')    adminAfter();
-  if(S.screen === 'assignee') assigneeAfter();
+  if(S.screen === 'home')       homeAfter();
+  if(S.screen === 'form')       formAfter();
+  if(S.screen === 'track')      trackAfter();
+  if(S.screen === 'login')      loginAfter();
+  if(S.screen === 'admin')      adminAfter();
+  if(S.screen === 'alltickets') allTicketsAfter();
+  if(S.screen === 'assignee')   assigneeAfter();
 }
 
 /* ============================================================
@@ -229,9 +236,10 @@ async function homeAfter(){
   if(!snap) return;
   if(API_URL === API_PLACEHOLDER) return;             // ยังไม่ต่อ backend → คงการ์ดคู่มือไว้
   let d = null;
-  try{ d = await api('publicStats'); }                 // action เสริม (อาจยังไม่มีใน backend)
+  try{ d = await api('publicStats'); }                 // ★ SM-D39 (เปิดใช้แล้วใน Phase 5)
   catch(e){ d = null; }                                // ไม่มี/ผิดพลาด → degrade เงียบ ๆ (คงการ์ดคู่มือ)
-  if(!d || !$('homeSnap')) return;
+  /* ยังไม่มีคำขอในปีงบนี้ → คงการ์ด "เริ่มต้นใช้งาน" (ห้ามโชว์ 0 ให้ดูเหมือนระบบร้าง — SM-D31/D39) */
+  if(!d || !(Number(d.total) > 0) || !$('homeSnap')) return;
   // มีสถิติสาธารณะจริง → แสดง donut + สรุป + stat cards
   const total = d.total || 0, open = d.open != null ? d.open : (d.open_total || 0);
   const closed = d.closed != null ? d.closed : (total - open);
@@ -268,30 +276,56 @@ let LOGIN = { step:1, email:'', resendLeft:0, timer:null };
 let ADMIN = { queue:[], dash:null, workload:[] };
 let MYT = { rows:[] };
 
+/* ★ SM-D33: token เก็บใน localStorage (จำข้ามการปิดแท็บ/เบราว์เซอร์)
+   — ของเดิมอยู่ใน sessionStorage → ย้ายให้อัตโนมัติครั้งแรกแล้วลบของเก่า (key เดิม 'sm_token') */
+const TOKEN_KEY = 'sm_token';
+function tokenLoad(){
+  let tk = null;
+  try{ tk = localStorage.getItem(TOKEN_KEY); }catch(e){}
+  if(tk) return tk;
+  let old = null;
+  try{ old = sessionStorage.getItem(TOKEN_KEY); }catch(e){}
+  if(old){ tokenSave(old); try{ sessionStorage.removeItem(TOKEN_KEY); }catch(e){} return old; }
+  return null;
+}
+function tokenSave(tk){ try{ localStorage.setItem(TOKEN_KEY, tk); }catch(e){} }
+function tokenClear(){ try{ localStorage.removeItem(TOKEN_KEY); }catch(e){} try{ sessionStorage.removeItem(TOKEN_KEY); }catch(e){} }
+
 function roleLabel(r){ return r==='admin'?'ผู้ดูแลระบบ':r==='moderator'?'ผู้กลั่นกรอง':r==='assignee'?'ผู้รับผิดชอบ':(r||''); }
 function isIntake(){ return !!(AUTH.user && (AUTH.user.role==='admin' || AUTH.user.role==='moderator')); }
 function staffHome(){ return isIntake() ? 'admin' : 'assignee'; }
 
-/* เรียก API แบบแนบ token + จับ session หมดอายุ */
+/* ★ SM-D33: session หมดกลางทาง — ล้าง token + กลับหน้า login + toast (ห้ามค้างหน้าจอเปล่า) */
+function onSessionLost(){
+  AUTH.token=null; AUTH.user=null; STAFF_LIST=[];
+  tokenClear();
+  closeM();
+  toast('เซสชันหมดอายุ กรุณาเข้าสู่ระบบใหม่');
+  go('login');
+}
+/* เรียก API แบบแนบ token + จับ session หมดอายุ (จับ SESSION_* ทุกแบบ — EXPIRED/INVALID/NO_TOKEN/NOT_STAFF) */
 async function apiA(action, params){
   try{ return await api(action, Object.assign({ token: AUTH.token }, params || {})); }
   catch(err){
-    if(err && (err.error==='SESSION_EXPIRED' || err.error==='SESSION_INVALID')){ doLogout(true); throw { error:err.error, msg:'เซสชันหมดอายุ กรุณาเข้าสู่ระบบใหม่' }; }
+    if(err && err.error && String(err.error).indexOf('SESSION_') === 0){
+      onSessionLost();
+      throw { error:err.error, msg:'เซสชันหมดอายุ กรุณาเข้าสู่ระบบใหม่' };
+    }
     throw err;
   }
 }
 async function restoreSession(){
   if(API_URL === API_PLACEHOLDER) return;
-  let tk = null; try{ tk = sessionStorage.getItem('sm_token'); }catch(e){}
+  const tk = tokenLoad();                     // ★ localStorage (+ ย้ายค่าเก่าจาก sessionStorage ให้)
   if(!tk) return;
   AUTH.token = tk;
   try{ const d = await api('checkSession', { token: tk }); AUTH.user = d.user; buildBars(); if(['login','staff','home'].includes(S.screen)) go(staffHome()); }
-  catch(e){ AUTH.token=null; AUTH.user=null; try{ sessionStorage.removeItem('sm_token'); }catch(_){} }
+  catch(e){ AUTH.token=null; AUTH.user=null; tokenClear(); buildBars(); }
 }
 function doLogout(silent){
   const tk = AUTH.token;
   AUTH.token=null; AUTH.user=null; STAFF_LIST=[];
-  try{ sessionStorage.removeItem('sm_token'); }catch(e){}
+  tokenClear();
   if(tk) api('logout', { token: tk }).catch(()=>{});
   if(!silent) toast('ออกจากระบบแล้ว');
   go('home');
@@ -309,7 +343,8 @@ function loginV(){
     ${s2
       ? `<div style="display:flex;gap:8px;margin-top:10px"><button class="btn ghost" onclick="loginBack()">← แก้อีเมล</button><button class="btn primary" style="flex:1" id="lgVerBtn" onclick="loginVerify()">ยืนยันเข้าสู่ระบบ</button></div>`
       : `<button class="btn primary" style="width:100%" id="lgReqBtn" onclick="loginRequest()">ขอรหัส OTP</button>`}
-    <p class="help" style="margin-top:14px;text-align:center">ผู้แจ้งไม่ต้องเข้าสู่ระบบ · <a href="#" data-scr="home">กลับหน้าหลัก</a></p>
+    <div class="msg info" style="margin-top:14px;font-size:12.5px">🖥️ ระบบจะจำการเข้าสู่ระบบบนเครื่องนี้ไว้ — ถ้าใช้เครื่องร่วมกับผู้อื่น กรุณากด «ออกจากระบบ» เมื่อเลิกใช้</div>
+    <p class="help" style="margin-top:10px;text-align:center">ผู้แจ้งไม่ต้องเข้าสู่ระบบ · <a href="#" data-scr="home">กลับหน้าหลัก</a></p>
   </div></div>`;
 }
 function loginAfter(){ if(LOGIN.step === 2){ wireOtp(); startLoginResend(); } }
@@ -328,7 +363,7 @@ async function loginVerify(){
   try{
     const d = await api('verifyOtp', { email: LOGIN.email, otp });
     AUTH.token = d.token; AUTH.user = d.user;
-    try{ sessionStorage.setItem('sm_token', d.token); }catch(e){}
+    tokenSave(d.token);                        // ★ SM-D33: localStorage — ปิดเบราว์เซอร์แล้วยังจำได้
     stopLoginResend(); LOGIN = { step:1, email:'', resendLeft:0, timer:null };
     toast('เข้าสู่ระบบสำเร็จ'); go(staffHome());
   }catch(err){ b.disabled=false; b.textContent='ยืนยันเข้าสู่ระบบ'; loginErr(err.msg || 'รหัส OTP ไม่ถูกต้อง'); }
@@ -347,7 +382,8 @@ function adminV(){
     <div class="hero" style="grid-template-columns:1.4fr 1fr;align-items:start;margin-bottom:0">
       <div id="admQueue">${loadingCard('กำลังโหลดคิว')}</div>
       <div id="admSide"></div>
-    </div>`;
+    </div>
+    <div id="admKpi" style="margin-top:20px"></div>`;
 }
 async function adminAfter(){
   try{
@@ -357,6 +393,7 @@ async function adminAfter(){
     renderAdminStats(dash); renderAdminQueue(ADMIN.queue); renderAdminSide(dash, ADMIN.workload);
     if($('admUpd')) $('admUpd').textContent = 'อัปเดต ' + fmtDate(new Date().toISOString(), true);
     drawTypeChart(dash);
+    renderAdminKpi(dash);                  // ★ SM-D38
   }catch(err){ if($('admQueue')) $('admQueue').innerHTML = errorCard(err.msg, "go('admin')"); }
 }
 function renderAdminStats(d){
@@ -364,11 +401,17 @@ function renderAdminStats(d){
   const nNew=(bs.NEW||0), nRet=(bs.RETURNED_INTAKE||0), nProg=(bs.PROGRESS||0)+(bs.ASSIGNED||0)+(bs.REVISION||0), nCl=(bs.CLOSED||0);
   const ov=(d&&d.sla&&d.sla.overdue)||0;
   if(!$('admStats')) return;
-  $('admStats').innerHTML=`
-   <div class="panel stat lift"><div class="num">${nNew}</div><div class="lbl">🆕 รอคัดกรอง</div><span class="chip c-amber" style="margin-top:8px">ต้องจัดการ</span></div>
-   <div class="panel stat lift"><div class="num">${nProg}</div><div class="lbl">⚙️ กำลังดำเนินการ</div><span class="chip c-blue" style="margin-top:8px">ในมือทีม</span></div>
-   <div class="panel stat lift"><div class="num">${nRet}</div><div class="lbl">↩️ ส่งกลับให้แก้</div><span class="chip c-red" style="margin-top:8px">รอผู้แจ้ง</span></div>
-   <div class="panel stat lift"><div class="num">${nCl}</div><div class="lbl">✅ ปิดงานแล้ว</div><span class="chip ${ov?'c-red':'c-green'}" style="margin-top:8px">${ov?('⏰ เกินกำหนด '+ov):'สะสม'}</span></div>`;
+  /* ★ SM-D34: การ์ดกดได้ → เปิด "งานทั้งหมด" พร้อมกรองสถานะให้เลย */
+  const card = (n, lbl, chip, chipCls, statusPreset)=>{
+    const g = `goAllTickets('${statusPreset}')`;
+    return `<div class="panel stat lift" role="button" tabindex="0" style="cursor:pointer" title="คลิกเพื่อดูรายการงาน" onclick="${g}" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();${g}}">
+      <div class="num">${n}</div><div class="lbl">${lbl}</div><span class="chip ${chipCls}" style="margin-top:8px">${chip}</span></div>`;
+  };
+  $('admStats').innerHTML =
+     card(nNew,  '🆕 รอคัดกรอง',      'ต้องจัดการ', 'c-amber', 'NEW')
+   + card(nProg, '⚙️ กำลังดำเนินการ', 'ในมือทีม',   'c-blue',  STATUS_GROUP_OPEN.join(','))
+   + card(nRet,  '↩️ ส่งกลับให้แก้',  'รอผู้แจ้ง',  'c-red',   'RETURNED_INTAKE')
+   + card(nCl,   '✅ ปิดงานแล้ว',      (ov?('⏰ เกินกำหนด '+ov):'สะสม'), (ov?'c-red':'c-green'), 'CLOSED');
 }
 function priBorder(p){ return p==='red'?'var(--heat-bad)':p==='yellow'?'var(--heat-warn)':p==='green'?'var(--heat-ok)':'var(--line)'; }
 function renderAdminQueue(rows){
@@ -401,6 +444,54 @@ function drawTypeChart(d){
   const cs=getComputedStyle(document.documentElement);
   try{ new Chart(el,{type:'bar',data:{labels:labels.length?labels:['—'],datasets:[{data:data.length?data:[0],backgroundColor:(cs.getPropertyValue('--green2').trim()||'#2e9e6b'),borderRadius:6}]},options:{plugins:{legend:{display:false}},scales:{y:{beginAtZero:true,ticks:{stepSize:1}}}}}); }catch(e){}
 }
+/* ---------- ★ KPI เวลาให้บริการ + กราฟปิดงานรายเดือน (SM-D38) ---------- */
+/* แสดงชั่วโมงเป็นหลัก + วงเล็บเป็นวันเมื่อค่ามาก (อ่านง่ายกว่าสำหรับงานที่ใช้หลายวัน) */
+function fmtHours(v){
+  if(v == null) return '—';
+  const n = Number(v);
+  if(isNaN(n)) return '—';
+  if(n < 24) return n + ' ชม.';
+  return n + ' ชม. <span style="font-size:12px;color:var(--ink3)">(≈ ' + (Math.round(n/24*10)/10) + ' วัน)</span>';
+}
+function kpiCard(valHtml, lbl, sub){
+  return `<div class="panel stat"><div class="num" style="font-size:22px">${valHtml}</div><div class="lbl">${lbl}</div>${sub?`<div class="help" style="margin-top:3px">${sub}</div>`:''}</div>`;
+}
+function renderAdminKpi(d){
+  const el = $('admKpi'); if(!el) return;
+  const m = (d && d.metrics) || null;
+  if(!m){ el.innerHTML = ''; return; }
+  const head = `<div class="sec-head" style="margin-bottom:12px"><h2 style="font-size:17px">📈 ตัวชี้วัด<b>เวลาให้บริการ</b></h2><span class="rt">อ้างจากงานที่ปิดแล้ว ${m.closed_count||0} ใบ</span></div>`;
+  const chartBlock = `<div class="panel" style="margin-top:14px"><h3 style="font-size:15px">📅 จำนวนงานที่ปิดรายเดือน</h3><canvas id="admMonthChart" height="110"></canvas></div>`;
+
+  if(m.insufficient){
+    el.innerHTML = `${head}<div class="panel"><div class="statecard" style="padding:28px 20px"><div class="ico">📊</div><h3>ข้อมูลยังน้อย</h3>
+      <p>ต้องมีงานที่ปิดแล้วอย่างน้อย ${m.min_closed_required||3} ใบ จึงจะแสดงค่าเฉลี่ยได้ (ขณะนี้ ${m.closed_count||0} ใบ)<br>
+      ระบบไม่แสดงค่าเฉลี่ยจากตัวอย่างน้อยเกินไป เพื่อไม่ให้ตัวเลขชวนเข้าใจผิด</p></div></div>${chartBlock}`;
+  }else{
+    const ss = m.sample_size || {};
+    const rate = (m.closed_overdue_rate != null) ? m.closed_overdue_rate : 0;
+    el.innerHTML = `${head}<div class="grid g4">
+      ${kpiCard(fmtHours(m.avg_hours_create_to_assign), '⏱️ ยื่น → มอบหมาย (เฉลี่ย)', `จาก ${ss.create_to_assign||0} ใบ`)}
+      ${kpiCard(fmtHours(m.avg_hours_assign_to_close),  '⚙️ มอบหมาย → ปิดงาน (เฉลี่ย)', `จาก ${ss.assign_to_close||0} ใบ`)}
+      ${kpiCard(fmtHours(m.avg_hours_create_to_close),  '🏁 ยื่น → ปิดงาน (รวมเฉลี่ย)', `จาก ${ss.create_to_close||0} ใบ`)}
+      ${kpiCard(`<span style="color:${rate>0?'var(--red)':'var(--green)'}">${rate}%</span>`, '⏰ ปิดงานหลังกำหนดส่ง', `${m.closed_overdue||0} จาก ${m.closed_with_deadline||0} ใบที่มีกำหนดส่ง`)}
+    </div>${chartBlock}`;
+  }
+  drawClosedMonthChart(m);
+}
+function drawClosedMonthChart(m){
+  const el = $('admMonthChart'); if(!el || !window.Chart) return;
+  const by = (m && m.closed_by_month) || {};
+  const keys = Object.keys(by).sort();
+  const labels = keys.map(k=>{ const p = k.split('-'); return (TH_MONTH[parseInt(p[1],10)-1]||k) + ' ' + String(parseInt(p[0],10)+543).slice(-2); });
+  const cs = getComputedStyle(document.documentElement);
+  try{
+    new Chart(el, { type:'bar',
+      data:{ labels: labels.length?labels:['—'], datasets:[{ data: keys.length?keys.map(k=>by[k]):[0], backgroundColor:(cs.getPropertyValue('--green2').trim()||'#2e9e6b'), borderRadius:6 }] },
+      options:{ plugins:{legend:{display:false}}, scales:{ y:{ beginAtZero:true, ticks:{ stepSize:1 } } } } });
+  }catch(e){}
+}
+
 async function doExportCsv(){
   try{
     const d=await apiA('exportCsv');
@@ -410,6 +501,162 @@ async function doExportCsv(){
     const url=URL.createObjectURL(blob); const a=document.createElement('a'); a.href=url; a.download=d.filename||'tickets.csv'; document.body.appendChild(a); a.click(); a.remove(); URL.revokeObjectURL(url);
   }catch(err){ toast(err.msg||'ส่งออก CSV ไม่สำเร็จ'); }
 }
+
+/* ============================================================
+   ★ ALL TICKETS (SM-D34) — "งานทั้งหมด": ทุกสถานะ ทุกผู้รับผิดชอบ
+   แก้ P2: หลังคัดกรอง/มอบหมาย งานหลุดออกจากคิว แล้วไม่มีทางเข้าถึงจากหน้าจอ
+   ============================================================ */
+const STATUS_ORDER = ['NEW','RETURNED_INTAKE','ASSIGNED','PROGRESS','REVISION','CLOSED','CANCELLED'];
+const STATUS_GROUP_OPEN = ['ASSIGNED','PROGRESS','REVISION'];   // ใช้กับการ์ด "กำลังดำเนินการ"
+let ALLT = { rows:[], total:0, page:1, page_size:25, counts:null,
+             f:{ status:'', assignee:'', type:'', q:'', from:'', to:'', sort:'newest' } };
+
+function allResetFilters(){
+  ALLT.f = { status:'', assignee:'', type:'', q:'', from:'', to:'', sort:'newest' };
+  ALLT.page = 1; ALLT.counts = null;
+}
+/* เปิดหน้างานทั้งหมดพร้อม preset สถานะ (ใช้จากการ์ดสถิติบนแดชบอร์ด) */
+function goAllTickets(status){
+  allResetFilters();
+  ALLT.f.status = status || '';
+  go('alltickets', status ? { status: status } : null);
+}
+
+function allAssigneeOptions(){
+  const f = ALLT.f;
+  return `<option value="">— ทุกคน —</option><option value="NONE" ${f.assignee==='NONE'?'selected':''}>⚪ ยังไม่มอบหมาย</option>` +
+    (STAFF_LIST||[]).filter(s=>s.active!==false).map(s=>`<option value="${esc(s.email)}" ${f.assignee===s.email?'selected':''}>${esc(s.name||s.email)}</option>`).join('');
+}
+/* จำนวนตามสถานะ — มาจาก counts_by_status (นับก่อนกรองสถานะ → ตัวเลขไม่หายเมื่อเลือกแล้ว) */
+function allStatusCount(v){
+  if(!ALLT.counts) return null;
+  if(v === '') return Object.keys(ALLT.counts).reduce((s,k)=> s + (ALLT.counts[k]||0), 0);
+  return v.split(',').reduce((s,k)=> s + (ALLT.counts[k]||0), 0);
+}
+function allChipsHtml(){
+  const cur = ALLT.f.status || '';
+  const items = [{ v:'', label:'📋 ทั้งหมด' }, { v:STATUS_GROUP_OPEN.join(','), label:'⚙️ ที่ยังทำอยู่ (รวม)' }];
+  STATUS_ORDER.forEach(s => items.push({ v:s, label: statusLabel(s) }));            // ป้ายไทยจาก config
+  if(cur && !items.some(i => i.v === cur)) items.push({ v:cur, label: cur.split(',').map(statusLabel).join(' + ') });
+  return `<div class="segbtns">${items.map(it=>{
+    const n = allStatusCount(it.v);
+    const g = `allSetStatus('${esc(it.v)}')`;
+    return `<span class="sb ${cur===it.v?'on':''}" role="button" tabindex="0" onclick="${g}" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();${g}}">${esc(it.label)}${n!=null?` <b>${n}</b>`:''}</span>`;
+  }).join('')}</div>`;
+}
+
+function allTicketsV(){
+  const f = ALLT.f;
+  const typeKeys = Object.keys(TYPES).length ? Object.keys(TYPES) : Object.keys((CFG&&CFG.types)||{});
+  return `<div class="sec-head"><h2>งาน<b>ทั้งหมด</b></h2><span class="rt" id="allRt">กำลังโหลด…</span></div>
+  <div class="panel" style="margin-bottom:14px">
+    <div id="allChips">${allChipsHtml()}</div>
+    <div class="allfilters" style="margin-top:14px">
+      <div class="field" style="margin:0"><label class="fl" for="afAssignee">ผู้รับผิดชอบ</label><select id="afAssignee">${allAssigneeOptions()}</select></div>
+      <div class="field" style="margin:0"><label class="fl" for="afType">ประเภทงาน</label><select id="afType"><option value="">— ทุกประเภท —</option>${typeKeys.map(t=>`<option value="${esc(t)}" ${f.type===t?'selected':''}>${esc(t)}</option>`).join('')}</select></div>
+      <div class="field" style="margin:0"><label class="fl" for="afFrom">ยื่นตั้งแต่วันที่</label><input type="date" id="afFrom" value="${esc(f.from)}"></div>
+      <div class="field" style="margin:0"><label class="fl" for="afTo">ถึงวันที่</label><input type="date" id="afTo" value="${esc(f.to)}"></div>
+      <div class="field" style="margin:0"><label class="fl" for="afQ">ค้นหา</label><input type="text" id="afQ" value="${esc(f.q)}" placeholder="เลขที่ / เรื่อง / ชื่อผู้แจ้ง" onkeydown="if(event.key==='Enter'){event.preventDefault();allSearch()}"></div>
+      <div class="field" style="margin:0"><label class="fl" for="afSort">เรียงตาม</label><select id="afSort"><option value="newest" ${f.sort==='newest'?'selected':''}>ใหม่สุดก่อน</option><option value="deadline" ${f.sort==='deadline'?'selected':''}>ใกล้ครบกำหนดก่อน</option><option value="priority" ${f.sort==='priority'?'selected':''}>ความเร่งด่วน</option></select></div>
+    </div>
+    <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:14px;align-items:center">
+      <button class="btn primary sm" onclick="allSearch()">🔎 ค้นหา</button>
+      <button class="btn ghost sm" onclick="allClear()">↺ ล้างตัวกรอง</button>
+      <button class="btn ghost sm" style="margin-left:auto" onclick="doExportCsv()">⬇️ ส่งออก CSV</button>
+    </div>
+  </div>
+  <div id="allResult">${loadingCard('กำลังโหลดรายการงาน')}</div>`;
+}
+
+async function allTicketsAfter(){
+  if(isIntake() && !STAFF_LIST.length){
+    try{ STAFF_LIST = await apiA('listStaff') || []; if($('afAssignee')) $('afAssignee').innerHTML = allAssigneeOptions(); }catch(e){}
+  }
+  loadAllTickets();
+}
+
+async function loadAllTickets(){
+  if(!$('allResult')) return;
+  $('allResult').innerHTML = loadingCard('กำลังโหลดรายการงาน');
+  const f = ALLT.f;
+  try{
+    const d = await apiA('allTickets', {
+      status:f.status, assignee:f.assignee, type:f.type, q:f.q,
+      from:f.from, to:f.to, sort:f.sort, page:ALLT.page, page_size:ALLT.page_size
+    });
+    ALLT.rows = d.rows||[]; ALLT.total = d.total||0;
+    ALLT.page = d.page||1;  ALLT.page_size = d.page_size||25;
+    ALLT.counts = d.counts_by_status || {};
+    if(!$('allResult')) return;                       // ผู้ใช้เปลี่ยนหน้าไปแล้ว
+    if($('allChips')) $('allChips').innerHTML = allChipsHtml();
+    if($('allRt')) $('allRt').textContent = `พบ ${ALLT.total} คำขอ · อัปเดต ${fmtDate(new Date().toISOString(), true)}`;
+    renderAllTickets();
+  }catch(err){
+    if($('allResult')) $('allResult').innerHTML = errorCard(err.msg, 'loadAllTickets()');
+    if($('allRt')) $('allRt').textContent = 'โหลดไม่สำเร็จ';
+  }
+}
+
+function renderAllTickets(){
+  const el = $('allResult'); if(!el) return;
+  const rows = ALLT.rows;
+  if(!rows.length){
+    el.innerHTML = `<div class="panel statecard"><div class="ico">🔍</div><h3>ไม่พบคำขอที่ตรงกับตัวกรอง</h3><p>ลองเปลี่ยนสถานะ ขยายช่วงวันที่ หรือล้างตัวกรอง</p><button class="btn ghost" onclick="allClear()">↺ ล้างตัวกรอง</button></div>`;
+    return;
+  }
+  const head = `<div class="allhead">
+    <span></span><span>เลขที่ / เรื่อง</span><span class="h-hide">ผู้แจ้ง</span><span class="h-hide">ประเภท</span><span>ผู้รับผิดชอบ</span><span style="text-align:right">สถานะ / กำหนดส่ง</span>
+  </div>`;
+  el.innerHTML = `<div class="panel">${head}${rows.map(t=>{
+    const overdue = t.sla && t.sla.state === 'overdue';
+    const open = `openTicket('${esc(t.ticket_no)}')`;
+    return `<div class="allrow cols lift" role="button" tabindex="0" onclick="${open}" onkeydown="if(event.key==='Enter'){event.preventDefault();${open}}">
+      <span class="c-dot">${pdot(t.priority)}</span>
+      <div style="min-width:0"><div style="font-weight:600;font-size:13.5px">${esc(t.ticket_no)}</div><div class="c-sub">${esc(t.subject||'')}</div></div>
+      <div class="c-txt">${esc(t.requester_name||'—')}</div>
+      <div class="c-txt">${esc(t.type||'—')}${t.subtype?`<div class="c-sub">› ${esc(t.subtype)}</div>`:''}</div>
+      <div class="c-txt">${t.assignee_name?esc(t.assignee_name):'<span style="color:var(--ink3)">— ยังไม่มอบหมาย —</span>'}</div>
+      <div class="c-side" style="text-align:right">${badge(t.status)}<div class="c-due">⏱ ${t.deadline?fmtDate(t.deadline):'—'}${overdue?' · <span style="color:var(--red);font-weight:700">เลยกำหนด</span>':''}</div></div>
+    </div>`;
+  }).join('')}${allPagerHtml()}</div>`;
+}
+
+function allPagerHtml(){
+  const last = Math.max(1, Math.ceil(ALLT.total / ALLT.page_size));
+  const from = ALLT.total ? ((ALLT.page-1)*ALLT.page_size + 1) : 0;
+  const to = Math.min(ALLT.page*ALLT.page_size, ALLT.total);
+  return `<div class="allpager">
+    <span class="info">แสดง ${from}-${to} จาก ${ALLT.total} · หน้า ${ALLT.page}/${last}</span>
+    <button class="btn ghost sm" ${ALLT.page<=1?'disabled':''} onclick="allGoPage(${ALLT.page-1})">← ก่อนหน้า</button>
+    <button class="btn ghost sm" ${ALLT.page>=last?'disabled':''} onclick="allGoPage(${ALLT.page+1})">ถัดไป →</button>
+  </div>`;
+}
+
+function allSetStatus(v){
+  ALLT.f.status = v; ALLT.page = 1;
+  if($('allChips')) $('allChips').innerHTML = allChipsHtml();
+  loadAllTickets();
+}
+function allSearch(){
+  const f = ALLT.f;
+  f.assignee = $('afAssignee') ? $('afAssignee').value : '';
+  f.type     = $('afType')     ? $('afType').value : '';
+  f.from     = $('afFrom')     ? $('afFrom').value : '';
+  f.to       = $('afTo')       ? $('afTo').value : '';
+  f.q        = $('afQ')        ? $('afQ').value.trim() : '';
+  f.sort     = $('afSort')     ? $('afSort').value : 'newest';
+  ALLT.page = 1;
+  loadAllTickets();
+}
+function allClear(){
+  allResetFilters();
+  ['afType','afFrom','afTo','afQ'].forEach(id=>{ if($(id)) $(id).value = ''; });
+  if($('afAssignee')) $('afAssignee').innerHTML = allAssigneeOptions();
+  if($('afSort')) $('afSort').value = 'newest';
+  if($('allChips')) $('allChips').innerHTML = allChipsHtml();
+  loadAllTickets();
+}
+function allGoPage(p){ if(p < 1) return; ALLT.page = p; loadAllTickets(); }
 
 /* ---------- ASSIGNEE (งานของฉัน) ---------- */
 function assigneeV(){
@@ -446,7 +693,7 @@ async function openTicket(no){
     renderTicketModal(d);
   }catch(err){ openM(`<div class="mh"><h3>${esc(no)}</h3><button class="mx" onclick="closeM()">✕</button></div><div class="mb"><div class="msg err">${esc(err.msg||'โหลดรายละเอียดไม่สำเร็จ')}</div></div>`); }
 }
-function refreshStaff(){ if(S.screen==='admin') adminAfter(); else if(S.screen==='assignee') assigneeAfter(); }
+function refreshStaff(){ if(S.screen==='admin') adminAfter(); else if(S.screen==='assignee') assigneeAfter(); else if(S.screen==='alltickets') loadAllTickets(); }
 function renderTicketModal(d){
   const t=d.ticket||{}; const st=t.status; const open=!['CLOSED','CANCELLED'].includes(st);
   const assignees=(STAFF_LIST||[]).filter(s=>s.active!==false);
@@ -470,7 +717,6 @@ function renderTicketModal(d){
    <div class="mb"><p style="font-weight:600;font-size:15px">${esc(t.subject||'')}</p>
    <div class="kv2"><b>ผู้แจ้ง</b><span>${esc(t.requester_name||'')}${t.requester_email?' · '+esc(t.requester_email):''}</span><b>ประเภท</b><span>${esc(t.type||'')}${t.subtype?' › '+esc(t.subtype):''}</span><b>ยื่นเมื่อ</b><span>${fmtDate(t.created_at,true)}</span><b>กำหนดส่ง</b><span>${t.deadline?fmtDate(t.deadline):'—'}</span><b>ผู้รับผิดชอบ</b><span>${esc(t.assignee_name||'— ยังไม่มอบหมาย —')}</span>${t.sla&&t.sla.label?`<b>SLA</b><span>${esc(t.sla.label)}</span>`:''}</div>
    ${t.note?`<div class="msg info" style="white-space:pre-wrap">📝 ${esc(t.note)}</div>`:''}
-   ${t.remark?`<div class="msg" style="white-space:pre-wrap;background:var(--panel2);border-color:var(--line)">🗒️ หมายเหตุ: ${esc(t.remark)}</div>`:''}
    ${t.last_return_reason&&(st==='RETURNED_INTAKE'||st==='REVISION')?`<div class="msg warn">📌 ${esc(t.last_return_reason)}</div>`:''}
    ${assignBlock}
    ${btns.length?`<div style="display:flex;gap:7px;flex-wrap:wrap;margin-top:12px">${btns.join('')}</div>`:''}
@@ -585,10 +831,9 @@ function formStep1(){
   <div class="field" id="subOtherWrap" style="display:none"><label class="fl" for="fSubOther">ระบุรายละเอียดเพิ่มเติม <span class="req">*</span></label><input type="text" id="fSubOther" maxlength="120" value="${esc(f.subtype_other||'')}" placeholder="โปรดระบุประเภทย่อย/รายละเอียดของบริการ"></div>
   <div class="field"><label class="fl" for="fDeadline">กำหนดส่ง (Deadline) <span class="req">*</span></label><input type="date" id="fDeadline" min="${todayStr()}" value="${esc(f.deadline||'')}">
     <div class="segbtns"><span class="sb" tabindex="0" role="button" onclick="setQuickDeadline(0)">⚡ วันนี้</span><span class="sb" tabindex="0" role="button" onclick="setQuickDeadline(1)">พรุ่งนี้</span><span class="sb" tabindex="0" role="button" onclick="setQuickDeadline(3)">ภายใน 3 วัน</span><span class="sb" tabindex="0" role="button" onclick="setQuickDeadline(7)">ภายใน 7 วัน</span></div>
-    <div class="help">กันการตั้งวันย้อนหลัง — เลือกวันนี้หรืออนาคตเท่านั้น</div>
+    <div class="help">${esc(deadlineHint())} · กันการตั้งวันย้อนหลัง — เลือกวันนี้หรืออนาคตเท่านั้น</div>
     <div class="err-tx" id="eDeadline" style="display:none"></div></div>
   <div class="field"><label class="fl" for="fNote">รายละเอียด / เนื้อหา</label><textarea id="fNote" maxlength="4000" placeholder="ระบุรายละเอียด หรือแนบไฟล์ประกอบด้านล่าง">${esc(f.note||'')}</textarea></div>
-  <div class="field"><label class="fl" for="fRemark">หมายเหตุ</label><textarea id="fRemark" maxlength="1000" placeholder="ระบุหมายเหตุเพิ่มเติม (ถ้ามี)">${esc(f.remark||'')}</textarea></div>
   <div class="field"><label class="fl">เอกสารแนบ</label>
     <div class="upzone" id="upzone" tabindex="0" role="button" aria-label="เลือกไฟล์แนบ">📎 ลากไฟล์มาวาง หรือคลิกเพื่อเลือก<div class="help" id="upHint" style="margin-top:4px">${esc(uploadHint())}</div></div>
     <input type="file" id="fFile" multiple style="display:none" onchange="onPickFiles(this)">
@@ -601,6 +846,12 @@ function formStep1(){
 function uploadHint(){
   const mb = (CFG && CFG.max_upload_mb) ? CFG.max_upload_mb : 10;
   return 'PDF, Word, Excel, รูปภาพ · ไม่เกิน ' + mb + ' MB/ไฟล์';
+}
+/* ★ SM-D35: อธิบายว่าวันกำหนดส่งนับถึงกี่โมง — ใช้ค่าจริงจาก config (ไม่ hardcode เวลา) */
+function deadlineHint(){
+  const t = (CFG && CFG.deadline_time_of_day) ? String(CFG.deadline_time_of_day) : '';
+  return t ? ('⏰ กำหนดส่งนับถึงสิ้นเวลาทำการ ' + t + ' ของวันที่เลือก')
+           : '⏰ กำหนดส่งนับถึงสิ้นเวลาทำการของวันที่เลือก';
 }
 
 function formStep2(){
@@ -726,7 +977,6 @@ function readStep1(){
   f.subtype_other = $('fSubOther') ? $('fSubOther').value.trim() : '';
   f.deadline = $('fDeadline') ? $('fDeadline').value : (f.deadline||'');
   f.note = $('fNote') ? $('fNote').value.trim() : '';
-  f.remark = $('fRemark') ? $('fRemark').value.trim() : '';
 }
 function fieldErr(id, msg){ const e=$(id); if(e){ e.style.display=''; e.textContent=msg; } }
 function clearFieldErr(id){ const e=$(id); if(e){ e.style.display='none'; e.textContent=''; } }
@@ -807,7 +1057,7 @@ async function formConfirmOtp(){
   const payload = {
     requester_email: f.requester_email, requester_name: f.requester_name, department: f.department,
     subject: f.subject, type: f.type, subtype: f.subtype || '',
-    note: f.note || '', remark: f.remark || '', deadline: f.deadline || '', otp: otp,
+    note: f.note || '', deadline: f.deadline || '', otp: otp,
     type_other: f.type_other || '', subtype_other: f.subtype_other || '',
     attachments: FORM.files.map(x=>({ name:x.name, mime:x.mime, base64:x.base64 }))
   };
@@ -833,7 +1083,8 @@ function formReset(){ stopResendTimer(); FORM = newForm(); render(); }
    ============================================================ */
 let TRACK = { ticket:'', em:'', data:null, files:[], autoSurvey:false };
 let surveyRating = 0;
-const TL_DOT = { create:'g', return_intake:'rd', resubmit:'gn', assign:'bl', reassign:'bl', priority:'am', start:'am', return_revision:'pu', comment:'g', attach:'g', close:'gn', cancel:'rd', satisfaction:'gn' };
+const TL_DOT = { create:'g', return_intake:'rd', resubmit:'gn', assign:'bl', reassign:'bl', priority:'am', start:'am', return_revision:'pu', comment:'g', attach:'g', close:'gn', cancel:'rd', satisfaction:'gn',
+                 alert_unassigned:'rd', satisfaction_reminder:'am' };   /* ★ SM-D36/D37 (เห็นเฉพาะฝั่งเจ้าหน้าที่) */
 
 function trackV(){
   return `<div class="sec-head"><h2>ติดตาม<b>สถานะคำขอ</b></h2><span class="rt">กรอกเลขที่คำขอและอีเมลที่ใช้ยื่น</span></div>
@@ -902,7 +1153,7 @@ function resubIntakeBox(t){
   return `<div class="msg warn">📌 <b>ถูกส่งกลับให้แก้ไข (ชั้นคัดกรอง):</b> ${esc(t.last_return_reason||'-')}</div>
   <div class="panel" style="background:var(--panel2)">
     <div class="field"><label class="fl" for="rsSubject">เรื่อง</label><input type="text" id="rsSubject" value="${esc(t.subject||'')}" maxlength="200"></div>
-    <div class="field"><label class="fl" for="rsDeadline">กำหนดส่ง</label><input type="date" id="rsDeadline" min="${todayStr()}" value="${t.deadline?isoToDateInput(t.deadline):''}"></div>
+    <div class="field"><label class="fl" for="rsDeadline">กำหนดส่ง</label><input type="date" id="rsDeadline" min="${todayStr()}" value="${t.deadline?isoToDateInput(t.deadline):''}"><div class="help">${esc(deadlineHint())}</div></div>
     <div class="field"><label class="fl" for="rsNote">รายละเอียดที่แก้ไข/เพิ่มเติม</label><textarea id="rsNote" maxlength="4000" placeholder="ระบุสิ่งที่แก้ไขตามที่เจ้าหน้าที่แจ้ง"></textarea></div>
     <div class="field"><label class="fl">แนบไฟล์เพิ่ม/แก้ไข</label><div class="upzone" tabindex="0" role="button" onclick="document.getElementById('rsFile').click()">📎 คลิกเพื่อเลือกไฟล์<div class="help">${esc(uploadHint())}</div></div><input type="file" id="rsFile" multiple style="display:none" onchange="onPickTrackFiles(this)"><div id="resubFileList"></div><div class="err-tx" id="eResubFile" style="display:none"></div></div>
     <div class="msg err" id="rsErr" style="display:none"></div>
