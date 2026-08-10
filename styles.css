@@ -222,3 +222,10 @@ html[data-theme=dark] .pbar i{background:linear-gradient(90deg,#b8f09e,#4ade80)}
 :focus-visible{outline:3px solid var(--green2);outline-offset:2px;border-radius:6px}
 .tab:focus-visible,.btn:focus-visible{outline-offset:3px}
 @media(prefers-reduced-motion:reduce){*{animation-duration:.001ms!important;animation-iteration-count:1!important;transition-duration:.001ms!important}}
+
+/* ---- ★ SM-D49: รายการในกล่อง "ประเมินก่อนยื่นคำขอใหม่" ---- */
+.gitem{border:1px solid var(--line);border-radius:12px;padding:12px 14px;margin:10px 0;background:var(--panel2)}
+.gitem.done{background:var(--greens);border-color:var(--greens-line);color:var(--green)}
+.gitem .stars{margin:6px 0 2px}
+.gitem .stars span{font-size:26px}
+.gitem textarea{width:100%;min-height:54px;margin-top:6px}
