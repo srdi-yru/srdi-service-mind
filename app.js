@@ -9,7 +9,7 @@
    วาง /exec URL ที่ได้จากการ Deploy backend (Apps Script) แทนข้อความ placeholder ด้านล่าง
    ตัวอย่าง: const API_URL = 'https://script.google.com/macros/s/AKfycbyr_uhx0TrSeVd5fR3M_TVJbE_yiVg5xKq9GCG0m-H4BDKr5TxhBUQzGreNoZPNGV_m/exec';
 */
-const API_URL = 'https://script.google.com/macros/s/AKfycbwPaN1CtgAOKD4tK6WPPT8dAhTdbtorUYIC8D5Ws3ZaLlTPjiSbkqaxMrDgPkWI_zpIuQ/exec';
+const API_URL = 'PASTE_WEBAPP_EXEC_URL_HERE';
 
 /* --- ค่าคงที่ระบบ --- */
 const API_PLACEHOLDER = 'PASTE_WEBAPP_EXEC_URL_HERE';
@@ -139,19 +139,25 @@ function buildBars(){
     tabs.push({ id:'assignee', t:'🗂️ งานของฉัน' });
   }
   $('tabs').innerHTML =
-    tabs.map(x => `<button class="tab ${S.screen === x.id ? 'active' : ''} ${x.cta ? 'cta' : ''}" data-scr="${x.id}" ${S.screen === x.id ? 'aria-current="page"' : ''}>${x.t}</button>`).join('')
-    + `<button class="tab mode" id="mBtn" data-mode aria-label="สลับโหมดสว่าง/มืด">${S.theme === 'light' ? '🌙' : '☀️'}</button>`;
+    tabs.map(x => `<button class="tab ${S.screen === x.id ? 'active' : ''} ${x.cta ? 'cta' : ''}" data-scr="${x.id}" ${S.screen === x.id ? 'aria-current="page"' : ''}>${x.t}</button>`).join('');
   const sl = $('staffLink');
+  // ★ S32 (ps3): ปุ่มสลับโหมดย้ายจากท้ายเมนูมาไว้แถบผู้ใช้ — เดิมตกไปบรรทัดที่ 2 เมื่อเข้าเป็นเจ้าหน้าที่ (เมนู 6 ปุ่ม)
+  //   คง id="mBtn" + data-mode เดิม → setTheme() และตัวดักคลิกใน boot() ใช้ได้เหมือนเดิม
+  if(sl && !$('mBtn')) sl.insertAdjacentHTML('beforebegin', `<button class="linkbtn mode" id="mBtn" data-mode aria-label="สลับโหมดสว่าง/มืด"></button>`);
+  if($('mBtn')) $('mBtn').textContent = (S.theme === 'light' ? '🌙' : '☀️');
   if(AUTH.user){
-    $('who').innerHTML = `<span class="rolepill">${esc(roleLabel(AUTH.user.role))}</span> <b>${esc(AUTH.user.name || '')}</b> · เข้าสู่ระบบแล้ว`;
+    $('who').innerHTML = `<span class="rolepill">${esc(roleLabel(AUTH.user.role))}</span> <b>${esc(AUTH.user.name || '')}</b><span class="who-note"> · เข้าสู่ระบบแล้ว</span>`;
     if(sl){ sl.textContent = 'ออกจากระบบ'; sl.removeAttribute('data-scr'); sl.setAttribute('data-act','logout'); }
   }else{
-    $('who').innerHTML = `<span class="rolepill">ผู้แจ้ง</span> ไม่ต้องเข้าสู่ระบบ — ส่งคำขอและติดตามได้เลย`;
+    // ★ SM-D57: เครื่องนี้จดจำผู้แจ้งไว้ → โชว์ชื่อไว้บนแถบ ให้คนที่มาใช้เครื่องต่อเห็นว่ายังจดจำใครอยู่
+    $('who').innerHTML = REQ_SESS
+      ? `<span class="rolepill">ผู้แจ้ง</span> <b>${esc(REQ_SESS.name || REQ_SESS.email)}</b><span class="who-note"> · เครื่องนี้จดจำไว้</span>`
+      : `<span class="rolepill">ผู้แจ้ง</span><span class="who-note"> ไม่ต้องเข้าสู่ระบบ — ส่งคำขอและติดตามได้เลย</span>`;
     if(sl){ sl.textContent = '🔑 เจ้าหน้าที่'; sl.setAttribute('data-scr','staff'); sl.removeAttribute('data-act'); }
   }
   if(CFG){
     if(CFG.system_title) $('brandTitle').textContent = CFG.system_title;
-    if(CFG.subtitle) $('brandSub').textContent = CFG.subtitle;
+    if(CFG.subtitle){ $('brandSub').textContent = CFG.subtitle; $('brandSub').title = CFG.subtitle; }   // ★ S32: จอแคบถูกตัดด้วย … → ชี้เมาส์ดูข้อความเต็มได้
   }
 }
 /* ไปหน้า screen + อัปเดต URL (?tab=...) โดยไม่รีโหลด — ลิงก์อีเมล/back button ใช้ได้ */
@@ -293,6 +299,8 @@ function tokenClear(){ try{ localStorage.removeItem(TOKEN_KEY); }catch(e){} try{
 
 function roleLabel(r){ return r==='admin'?'ผู้ดูแลระบบ':r==='moderator'?'ผู้กลั่นกรอง':r==='assignee'?'ผู้รับผิดชอบ':(r||''); }
 function isIntake(){ return !!(AUTH.user && (AUTH.user.role==='admin' || AUTH.user.role==='moderator')); }
+/* ★ SM-D42 (WP6.1): ปุ่มเพิ่มเจ้าหน้าที่ = admin เท่านั้น — ⚠️ ห้ามใช้ isIntake() (รวม moderator → backend ตอบ FORBIDDEN) */
+function isAdmin(){ return !!(AUTH.user && AUTH.user.role==='admin'); }
 function staffHome(){ return isIntake() ? 'admin' : 'assignee'; }
 
 /* ★ SM-D33: session หมดกลางทาง — ล้าง token + กลับหน้า login + toast (ห้ามค้างหน้าจอเปล่า) */
@@ -383,18 +391,20 @@ function adminV(){
       <div id="admQueue">${loadingCard('กำลังโหลดคิว')}</div>
       <div id="admSide"></div>
     </div>
-    <div id="admKpi" style="margin-top:20px"></div>`;
+    <div id="admReport" style="margin-top:22px">${loadingCard('กำลังโหลดรายงานประจำปีงบ')}</div>`;
 }
 async function adminAfter(){
   try{
-    const [q, dash, wl] = await Promise.all([ apiA('queue',{page:1,page_size:50}), apiA('dashboard'), apiA('workload') ]);
+    // ★ SM-D43 (WP6.2): โหลดรายชื่อเจ้าหน้าที่มาพร้อมกัน → การ์ดในคิวทำ dropdown มอบหมายได้ทันที
+    //   (ยังคงโหลดแบบ lazy ใน openTicket / allTicketsAfter ไว้ — จำเป็นเมื่อเข้าหน้าอื่นก่อน)
+    const [q, dash, wl, st] = await Promise.all([ apiA('queue',{page:1,page_size:50}), apiA('dashboard'), apiA('workload'), apiA('listStaff').catch(()=>null) ]);
+    if(Array.isArray(st)) STAFF_LIST = st;
     ADMIN.queue = q.rows||[]; ADMIN.dash = dash; ADMIN.workload = wl||[];
     if(!$('admStats')) return;
     renderAdminStats(dash); renderAdminQueue(ADMIN.queue); renderAdminSide(dash, ADMIN.workload);
     if($('admUpd')) $('admUpd').textContent = 'อัปเดต ' + fmtDate(new Date().toISOString(), true);
-    drawTypeChart(dash);
-    renderAdminKpi(dash);                  // ★ SM-D38
   }catch(err){ if($('admQueue')) $('admQueue').innerHTML = errorCard(err.msg, "go('admin')"); }
+  if(AUTH.user && S.screen === 'admin') loadReport();   // ★ S28: รายงานโหลดแยก — คิวขึ้นก่อน ไม่ต้องรอรายงาน
 }
 function renderAdminStats(d){
   const bs=(d&&d.by_status)||{};
@@ -414,36 +424,111 @@ function renderAdminStats(d){
    + card(nCl,   '✅ ปิดงานแล้ว',      (ov?('⏰ เกินกำหนด '+ov):'สะสม'), (ov?'c-red':'c-green'), 'CLOSED');
 }
 function priBorder(p){ return p==='red'?'var(--heat-bad)':p==='yellow'?'var(--heat-warn)':p==='green'?'var(--heat-ok)':'var(--line)'; }
+
+/* ★ ps2 / SM-D43: ตัวเลือกผู้รับผิดชอบ = เจ้าหน้าที่ active **ทุกบทบาท** (บทบาทซ้อนกันเป็นขั้น — ผู้กลั่นกรองรับงานเองได้)
+   เรียง ผู้รับผิดชอบ → ผู้กลั่นกรอง → ผู้ดูแล · ต่อท้ายด้วยจำนวนงานที่ค้างในมือ (ช่วยเลือกคนที่งานน้อย) */
+function staffOptionsHtml(selected){
+  const openBy = {};
+  (ADMIN.workload||[]).forEach(w=>{ openBy[String(w.email||'').toLowerCase()] = w.open||0; });
+  const order = { assignee:0, moderator:1, admin:2 };
+  const rk = r => (order[r] != null ? order[r] : 9);
+  return (STAFF_LIST||[]).filter(s=>s.active!==false).slice()
+    .sort((a,b)=> (rk(a.role)-rk(b.role)) || String(a.name||'').localeCompare(String(b.name||''), 'th'))
+    .map(s=>{
+      const n = openBy[String(s.email||'').toLowerCase()] || 0;
+      return `<option value="${esc(s.email)}" ${selected===s.email?'selected':''}>${esc(s.name||s.email)} · ${esc(roleLabel(s.role))}${n?` · ค้าง ${n}`:''}</option>`;
+    }).join('');
+}
 function renderAdminQueue(rows){
   const el=$('admQueue'); if(!el) return;
   const head=`<div class="sec-head" style="margin-bottom:10px"><h2 style="font-size:16px">🆕 คิวรับเรื่อง</h2><span class="rt">เรียงตามความด่วน → อายุงาน</span></div>`;
   if(!rows.length){ el.innerHTML=`<div class="panel">${head}<div class="statecard" style="padding:30px"><div class="ico">📭</div><h3>คิวว่าง</h3><p>ยังไม่มีคำขอใหม่รอคัดกรอง</p></div></div>`; return; }
   el.innerHTML=`<div class="panel">${head}
-    ${rows.map(t=>`<div class="panel task lift" style="margin-bottom:9px;border-left:5px solid ${priBorder(t.priority)}"><div>
-      <div class="nm">${pdot(t.priority)} ${esc(t.ticket_no)} — ${esc(t.subject||'')}</div>
+    ${rows.map(t=>{
+      const no = esc(t.ticket_no);
+      /* ★ SM-D43: มอบหมายเร็วจากการ์ด (ทางลัด — ปุ่มเดิมทั้ง 2 ปุ่มยังอยู่) · เฉพาะสถานะ "รับเรื่อง"
+         ใบที่ตีกลับไปอยู่กับผู้แจ้ง (RETURNED_INTAKE) backend ไม่ให้มอบหมาย จึงไม่แสดง dropdown */
+      const quick = t.status === 'NEW'
+        ? `<div class="qassign" onclick="event.stopPropagation()">
+             <select id="qa_${no}" aria-label="มอบหมาย ${no} ให้" onchange="qaToggle('${no}')"><option value="">— มอบหมายเร็วให้ —</option>${staffOptionsHtml()}</select>
+             <button class="btn primary sm" id="qab_${no}" disabled onclick="event.stopPropagation();quickAssign('${no}')">✔️ มอบหมาย</button>
+           </div>`
+        : `<div class="help" style="margin-top:8px">↩️ รอผู้แจ้งแก้ไขและส่งกลับ — ยังมอบหมายไม่ได้</div>`;
+      return `<div class="panel task lift" style="margin-bottom:9px;border-left:5px solid ${priBorder(t.priority)}"><div style="flex:1;min-width:0">
+      <div class="nm">${pdot(t.priority)} ${no} — ${esc(t.subject||'')}</div>
       <div class="mt">${esc(t.requester_name||'')} · ${esc(t.type||'')}${t.subtype?' › '+esc(t.subtype):''}</div>
-      <div style="margin-top:8px;display:flex;gap:6px;flex-wrap:wrap"><button class="btn primary sm" onclick="openTicket('${esc(t.ticket_no)}')">คัดกรอง / มอบหมาย</button><button class="btn warn sm" onclick="openReturn('${esc(t.ticket_no)}','intake')">↩️ ตีกลับ</button></div>
-    </div><div class="side">${badge(t.status)}<span class="chip ${t.status==='RETURNED_INTAKE'?'c-red':'c-amber'}">⏱ ${t.deadline?fmtDate(t.deadline):'-'}</span></div></div>`).join('')}
-    <div style="margin-top:8px"><button class="btn ghost sm" onclick="doExportCsv()">⬇️ ส่งออก CSV</button></div>
+      <div style="margin-top:8px;display:flex;gap:6px;flex-wrap:wrap"><button class="btn primary sm" onclick="openTicket('${no}')">คัดกรอง / มอบหมาย</button><button class="btn warn sm" onclick="openReturn('${no}','intake')">↩️ ตีกลับ</button></div>
+      ${quick}
+    </div><div class="side">${badge(t.status)}<span class="chip ${t.status==='RETURNED_INTAKE'?'c-red':'c-amber'}">⏱ ${t.deadline?fmtDate(t.deadline):'-'}</span></div></div>`;
+    }).join('')}
+    <div style="margin-top:8px"><button class="btn ghost sm" onclick="doExportCsv()">⬇️ ส่งออก CSV (ทุกปีงบ)</button></div>
   </div>`;
+}
+function qaToggle(no){ const s=$('qa_'+no), b=$('qab_'+no); if(b) b.disabled = !(s && s.value); }
+async function quickAssign(no){
+  const sel=$('qa_'+no), btn=$('qab_'+no);
+  const email = sel ? sel.value : '';
+  if(!email || !btn) return;
+  btn.disabled = true; if(sel) sel.disabled = true; btn.innerHTML = '<span class="spin"></span>กำลังมอบหมาย';
+  try{
+    const r = await apiA('assign', { ticket_no:no, assignee_email:email });   // action เดิม (ไม่แก้ backend)
+    toast('มอบหมาย ' + no + ' ให้ ' + ((r && r.assignee_name) || '') + ' แล้ว');
+    adminAfter();
+  }catch(err){
+    btn.disabled = false; if(sel) sel.disabled = false; btn.textContent = '✔️ มอบหมาย';
+    toast((err && err.msg) || 'มอบหมายไม่สำเร็จ');
+  }
 }
 function renderAdminSide(d, wl){
   const el=$('admSide'); if(!el) return;
   const maxOpen=Math.max(1, ...(wl.length?wl.map(w=>w.open||0):[1]));
-  const sat=(d&&d.satisfaction)||{};
-  el.innerHTML=`<div class="panel"><h3 style="font-size:15px">👥 ภาระงานเจ้าหน้าที่</h3>
+  const ov=(d&&d.sla&&d.sla.overdue)||0;
+  const addBtn = isAdmin() ? `<button class="btn ghost sm" style="margin-left:auto" onclick="openAddStaff()">＋ เพิ่มเจ้าหน้าที่</button>` : '';
+  el.innerHTML=`<div class="panel"><div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:4px"><h3 style="font-size:15px">👥 ภาระงานเจ้าหน้าที่</h3>${addBtn}</div>
     ${wl.length?wl.map(w=>`<div class="wl"><span class="nm">${esc(w.name||w.email||'')}</span><span class="pbar" style="flex:1"><i style="width:${Math.round((w.open||0)*100/maxOpen)}%"></i></span><span class="cnt">${w.open||0}</span></div>`).join(''):'<p class="help">ยังไม่มีข้อมูลภาระงาน</p>'}
-  </div>
-  <div class="panel" style="margin-top:14px"><h3 style="font-size:15px">📈 งานตามประเภท</h3><canvas id="admChart" height="150"></canvas>
-    <div class="grid g2" style="gap:8px;margin-top:10px"><div class="panel stat" style="padding:12px"><div class="num" style="font-size:19px">${sat.avg!=null&&sat.count?Number(sat.avg).toFixed(1)+'/5':'—'}</div><div class="lbl">ความพึงพอใจ (ISO 10002)</div></div><div class="panel stat" style="padding:12px"><div class="num" style="font-size:19px">${(d&&d.open_total)||0}</div><div class="lbl">งานที่เปิดอยู่</div></div></div>
+    <p class="help" style="margin-top:8px">งานที่ยังเปิดอยู่ทั้งหมด ${(d&&d.open_total)||0} ใบ${ov?` · <span style="color:var(--red);font-weight:600">เลยกำหนด ${ov} ใบ</span>`:''} · ตัวเลขประจำปีงบ ดูที่ "รายงานประจำปีงบประมาณ" ด้านล่าง</p>
   </div>`;
 }
-function drawTypeChart(d){
-  const el=$('admChart'); if(!el || !window.Chart) return;
-  const bt=(d&&d.by_type)||{}; const labels=Object.keys(bt); const data=labels.map(k=>bt[k]);
-  const cs=getComputedStyle(document.documentElement);
-  try{ new Chart(el,{type:'bar',data:{labels:labels.length?labels:['—'],datasets:[{data:data.length?data:[0],backgroundColor:(cs.getPropertyValue('--green2').trim()||'#2e9e6b'),borderRadius:6}]},options:{plugins:{legend:{display:false}},scales:{y:{beginAtZero:true,ticks:{stepSize:1}}}}}); }catch(e){}
+
+/* ---------- ★ SM-D42 (WP6.1): เพิ่มเจ้าหน้าที่ (admin เท่านั้น · เพิ่มได้อย่างเดียว — แก้/ปิดใช้งานทำในชีต Staff) ---------- */
+function openAddStaff(){
+  if(!isAdmin()){ toast('เฉพาะผู้ดูแลระบบเท่านั้น'); return; }
+  openM(`<div class="mh"><h3>＋ เพิ่มเจ้าหน้าที่</h3><button class="mx" onclick="closeM()" aria-label="ปิด">✕</button></div>
+   <div class="mb">
+     <div class="field"><label class="fl" for="asEmail">อีเมล <span class="req">*</span></label><input type="email" id="asEmail" maxlength="120" placeholder="name@yru.ac.th"><div class="help">อีเมลที่เจ้าหน้าที่ใช้รับรหัส OTP เข้าระบบ — <b>ไม่ใช่</b>ชื่อ · ระบบตัดเว้นวรรคหัวท้ายให้เอง</div></div>
+     <div class="field"><label class="fl" for="asName">ชื่อที่แสดงในระบบ <span class="req">*</span></label><input type="text" id="asName" maxlength="80" placeholder="เช่น นัสรี"><div class="help">ชื่อนี้โผล่ในรายชื่อมอบหมายงานและในอีเมล</div></div>
+     <div class="field"><label class="fl" for="asRole">บทบาท <span class="req">*</span></label><select id="asRole">
+       <option value="assignee">${esc(roleLabel('assignee'))} — รับงานไปทำ</option>
+       <option value="moderator">${esc(roleLabel('moderator'))} — คัดกรอง/มอบหมาย + รับงานเองได้</option>
+       <option value="admin">${esc(roleLabel('admin'))} — ทำได้ทุกอย่าง + เพิ่มเจ้าหน้าที่</option>
+     </select><div class="help">บทบาทซ้อนกันเป็นขั้น — เลือก<b>บทบาทสูงสุด</b>ที่คนนั้นต้องใช้ (ไม่ต้องเพิ่ม 2 แถว)</div></div>
+     <div class="msg info" style="font-size:12.5px">แก้ชื่อ / เปลี่ยนบทบาท / ปิดใช้งาน ยังทำในชีต <b>Staff</b> (ช่อง active ใส่ FALSE หรือ no = ปิดใช้งาน) แล้วกด bootstrap 1 ครั้ง</div>
+     <div class="msg err" id="asErr" style="display:none"></div>
+     <button class="btn primary" id="asBtn" onclick="doAddStaff()">＋ เพิ่มเจ้าหน้าที่</button>
+   </div>`);
+  if($('asEmail')) $('asEmail').focus();
 }
+async function doAddStaff(){
+  const email = $('asEmail') ? $('asEmail').value.trim() : '';
+  const name  = $('asName')  ? $('asName').value.trim()  : '';
+  const role  = $('asRole')  ? $('asRole').value         : '';
+  const e = $('asErr'); if(e) e.style.display = 'none';
+  const fail = m => { if(e){ e.style.display=''; e.textContent = m; } };
+  if(!email || email.indexOf('@') < 1){ fail('กรุณากรอกอีเมลให้ถูกต้อง'); return; }
+  if(!name){ fail('กรุณากรอกชื่อที่แสดงในระบบ'); return; }
+  const b = $('asBtn'); b.disabled = true; b.innerHTML = '<span class="spin"></span>กำลังเพิ่ม...';
+  try{
+    await apiA('addStaff', { email, name, role });
+    STAFF_LIST = [];                                     // ล้าง cache → dropdown มอบหมายเห็นคนใหม่ทันที
+    closeM(); toast('เพิ่ม ' + name + ' (' + roleLabel(role) + ') แล้ว');
+    adminAfter();
+  }catch(err){
+    b.disabled = false; b.textContent = '＋ เพิ่มเจ้าหน้าที่';
+    fail(err && err.error === 'EXISTS' ? 'อีเมลนี้มีอยู่ในระบบแล้ว — ถ้าต้องการเปลี่ยนบทบาท ให้แก้ในชีต Staff'
+                                       : ((err && err.msg) || 'เพิ่มเจ้าหน้าที่ไม่สำเร็จ'));
+  }
+}
+
 /* ---------- ★ KPI เวลาให้บริการ + กราฟปิดงานรายเดือน (SM-D38) ---------- */
 /* แสดงชั่วโมงเป็นหลัก + วงเล็บเป็นวันเมื่อค่ามาก (อ่านง่ายกว่าสำหรับงานที่ใช้หลายวัน) */
 function fmtHours(v){
@@ -456,49 +541,179 @@ function fmtHours(v){
 function kpiCard(valHtml, lbl, sub){
   return `<div class="panel stat"><div class="num" style="font-size:22px">${valHtml}</div><div class="lbl">${lbl}</div>${sub?`<div class="help" style="margin-top:3px">${sub}</div>`:''}</div>`;
 }
-function renderAdminKpi(d){
-  const el = $('admKpi'); if(!el) return;
-  const m = (d && d.metrics) || null;
+function renderReportKpi(m){
+  const el = $('rpKpi'); if(!el) return;
   if(!m){ el.innerHTML = ''; return; }
-  const head = `<div class="sec-head" style="margin-bottom:12px"><h2 style="font-size:17px">📈 ตัวชี้วัด<b>เวลาให้บริการ</b></h2><span class="rt">อ้างจากงานที่ปิดแล้ว ${m.closed_count||0} ใบ</span></div>`;
-  const chartBlock = `<div class="panel" style="margin-top:14px"><h3 style="font-size:15px">📅 จำนวนงานที่ปิดรายเดือน</h3><canvas id="admMonthChart" height="110"></canvas></div>`;
-
+  const head = `<h3 style="font-size:15px;margin-bottom:10px">⏱️ เวลาให้บริการ <span class="help">(จากงานที่ปิดแล้ว ${m.closed_count||0} ใบ)</span></h3>`;
   if(m.insufficient){
-    el.innerHTML = `${head}<div class="panel"><div class="statecard" style="padding:28px 20px"><div class="ico">📊</div><h3>ข้อมูลยังน้อย</h3>
+    el.innerHTML = `${head}<div class="panel"><div class="statecard" style="padding:22px 20px"><div class="ico">📊</div><h3>ข้อมูลยังน้อย</h3>
       <p>ต้องมีงานที่ปิดแล้วอย่างน้อย ${m.min_closed_required||3} ใบ จึงจะแสดงค่าเฉลี่ยได้ (ขณะนี้ ${m.closed_count||0} ใบ)<br>
-      ระบบไม่แสดงค่าเฉลี่ยจากตัวอย่างน้อยเกินไป เพื่อไม่ให้ตัวเลขชวนเข้าใจผิด</p></div></div>${chartBlock}`;
-  }else{
-    const ss = m.sample_size || {};
-    const rate = (m.closed_overdue_rate != null) ? m.closed_overdue_rate : 0;
-    el.innerHTML = `${head}<div class="grid g4">
-      ${kpiCard(fmtHours(m.avg_hours_create_to_assign), '⏱️ ยื่น → มอบหมาย (เฉลี่ย)', `จาก ${ss.create_to_assign||0} ใบ`)}
-      ${kpiCard(fmtHours(m.avg_hours_assign_to_close),  '⚙️ มอบหมาย → ปิดงาน (เฉลี่ย)', `จาก ${ss.assign_to_close||0} ใบ`)}
-      ${kpiCard(fmtHours(m.avg_hours_create_to_close),  '🏁 ยื่น → ปิดงาน (รวมเฉลี่ย)', `จาก ${ss.create_to_close||0} ใบ`)}
-      ${kpiCard(`<span style="color:${rate>0?'var(--red)':'var(--green)'}">${rate}%</span>`, '⏰ ปิดงานหลังกำหนดส่ง', `${m.closed_overdue||0} จาก ${m.closed_with_deadline||0} ใบที่มีกำหนดส่ง`)}
-    </div>${chartBlock}`;
+      ระบบไม่แสดงค่าเฉลี่ยจากตัวอย่างน้อยเกินไป เพื่อไม่ให้ตัวเลขชวนเข้าใจผิด</p></div></div>`;
+    return;
   }
-  drawClosedMonthChart(m);
+  const ss = m.sample_size || {};
+  const rate = (m.closed_overdue_rate != null) ? m.closed_overdue_rate : 0;
+  el.innerHTML = `${head}<div class="grid g4">
+    ${kpiCard(fmtHours(m.avg_hours_create_to_assign), '⏱️ ยื่น → มอบหมาย (เฉลี่ย)', `จาก ${ss.create_to_assign||0} ใบ`)}
+    ${kpiCard(fmtHours(m.avg_hours_assign_to_close),  '⚙️ มอบหมาย → ปิดงาน (เฉลี่ย)', `จาก ${ss.assign_to_close||0} ใบ`)}
+    ${kpiCard(fmtHours(m.avg_hours_create_to_close),  '🏁 ยื่น → ปิดงาน (รวมเฉลี่ย)', `จาก ${ss.create_to_close||0} ใบ`)}
+    ${kpiCard(`<span style="color:${rate>0?'var(--red)':'var(--green)'}">${rate}%</span>`, '⏰ ปิดงานหลังกำหนดส่ง', `${m.closed_overdue||0} จาก ${m.closed_with_deadline||0} ใบที่มีกำหนดส่ง`)}
+  </div>`;
 }
-function drawClosedMonthChart(m){
-  const el = $('admMonthChart'); if(!el || !window.Chart) return;
-  const by = (m && m.closed_by_month) || {};
-  const keys = Object.keys(by).sort();
-  const labels = keys.map(k=>{ const p = k.split('-'); return (TH_MONTH[parseInt(p[1],10)-1]||k) + ' ' + String(parseInt(p[0],10)+543).slice(-2); });
+/* กราฟแท่งแบบเดียวกันทั้งหน้า (สีจากตัวแปรธีม --green2 · ไม่แตะ design tokens) */
+function drawBar(elId, labels, data){
+  const el = $(elId); if(!el || !window.Chart) return;
   const cs = getComputedStyle(document.documentElement);
   try{
     new Chart(el, { type:'bar',
-      data:{ labels: labels.length?labels:['—'], datasets:[{ data: keys.length?keys.map(k=>by[k]):[0], backgroundColor:(cs.getPropertyValue('--green2').trim()||'#2e9e6b'), borderRadius:6 }] },
+      data:{ labels: labels.length?labels:['—'], datasets:[{ data: data.length?data:[0], backgroundColor:(cs.getPropertyValue('--green2').trim()||'#2e9e6b'), borderRadius:6 }] },
       options:{ plugins:{legend:{display:false}}, scales:{ y:{ beginAtZero:true, ticks:{ stepSize:1 } } } } });
   }catch(e){}
 }
+function drawClosedMonthChart(m){
+  const by = (m && m.closed_by_month) || {};
+  const keys = Object.keys(by).sort();
+  drawBar('admMonthChart', keys.map(k=>{ const p = k.split('-'); return (TH_MONTH[parseInt(p[1],10)-1]||k) + ' ' + String(parseInt(p[0],10)+543).slice(-2); }), keys.map(k=>by[k]));
+}
 
-async function doExportCsv(){
+/* ============================================================
+   ★ S28 + D44 + S24/SM-D59 — รายงานประจำปีงบประมาณ (ผู้ดูแล/ผู้กลั่นกรองเท่านั้น)
+   กฎนับ: ใบของปีงบไหน = ใบที่ "ยื่น" ในปีงบนั้น (1 ต.ค.–30 ก.ย.) — ตรงกับหน้าแรกและเลขที่คำขอ
+   ============================================================ */
+const REPORT_FY_KEY = 'sm_report_fy';   // จำปีงบที่เลือกไว้ในเครื่อง ('' = ปีงบปัจจุบันเสมอ)
+let REPORT = { fy:null, data:null };
+function reportFyGet(){
+  if(REPORT.fy == null){ try{ REPORT.fy = localStorage.getItem(REPORT_FY_KEY) || ''; }catch(e){ REPORT.fy = ''; } }
+  return REPORT.fy;
+}
+function reportSetFy(v){
+  v = String(v == null ? '' : v);
+  if(REPORT.data && Number(v) === Number(REPORT.data.current_fy)) v = '';   // เลือกปีปัจจุบัน = "ปีปัจจุบันเสมอ" (ข้ามปีแล้วตามให้เอง)
+  REPORT.fy = v;
+  try{ localStorage.setItem(REPORT_FY_KEY, v); }catch(e){}
+  if($('admReport')) $('admReport').innerHTML = loadingCard('กำลังโหลดรายงานประจำปีงบ');
+  loadReport();
+}
+async function loadReport(){
+  if(!$('admReport')) return;
   try{
-    const d=await apiA('exportCsv');
+    const d = await apiA('report', { fy: reportFyGet() });
+    REPORT.data = d;
+    if(!$('admReport')) return;
+    renderReport(d);
+  }catch(err){ if($('admReport')) $('admReport').innerHTML = errorCard((err && err.msg) || 'โหลดรายงานไม่สำเร็จ', 'loadReport()'); }
+}
+function fyLabel(fy, cur){ return String(fy) === 'all' ? 'ทุกปีงบ' : ('ปีงบ ' + fy + (Number(fy) === Number(cur) ? ' (ปัจจุบัน)' : '')); }
+function fySelectHtml(d){
+  const sel = String(d.fy);
+  const opts = (d.fiscal_years && d.fiscal_years.length ? d.fiscal_years : [d.current_fy])
+    .map(f=>`<option value="${esc(f)}" ${String(f)===sel?'selected':''}>${esc(fyLabel(f, d.current_fy))}</option>`).join('')
+    + `<option value="all" ${sel==='all'?'selected':''}>ทุกปีงบ</option>`;
+  return `<select id="rpFy" style="width:auto;padding:7px 10px;font-size:13px" aria-label="เลือกปีงบประมาณของรายงาน" onchange="reportSetFy(this.value)">${opts}</select>`;
+}
+function renderReport(d){
+  const el = $('admReport'); if(!el) return;
+  const s = d.summary || {};
+  const title = fyLabel(d.fy, d.current_fy);
+  const endIso = d.range ? new Date(new Date(d.range.end_exclusive).getTime() - 1).toISOString() : '';
+  const rangeTxt = d.range ? (fmtDate(d.range.start) + ' – ' + fmtDate(endIso)) : 'ตั้งแต่เริ่มใช้ระบบ';
+  const head = `<div class="sec-head" style="margin-bottom:6px"><h2 style="font-size:17px">📊 รายงาน<b>ประจำปีงบประมาณ</b></h2>
+    <span class="rt" style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">${fySelectHtml(d)}<button class="btn ghost sm" onclick="doExportCsv('${esc(d.fy)}')">⬇️ CSV ${esc(title)}</button></span></div>
+    <p class="help" style="margin:0 0 12px">${esc(title)} · ${esc(rangeTxt)} · นับตาม<b>วันที่ยื่นคำขอ</b> · สรุปใหม่ทุก 5 นาที</p>`;
+  if(!(s.total > 0)){
+    const prev = String(d.fy) === 'all' ? null : (d.fiscal_years||[]).find(f => String(f) !== String(d.fy));
+    el.innerHTML = head + `<div class="panel statecard"><div class="ico">🗓️</div><h3>${esc(title)} ยังไม่มีคำขอ</h3>
+      <p>เมื่อมีคำขอที่ยื่นในช่วงนี้ ตัวเลขจะขึ้นที่นี่เอง</p>${prev?`<button class="btn ghost" onclick="reportSetFy('${esc(prev)}')">ดูปีงบ ${esc(prev)}</button>`:''}</div>`;
+    return;
+  }
+  el.innerHTML = head + `
+    <div class="grid g4">
+      ${kpiCard(s.total, '📥 รับคำขอ', '')}
+      ${kpiCard(`${s.closed} <span style="font-size:13px;color:var(--ink3)">(${s.closed_rate}%)</span>`, '✅ ปิดงานแล้ว', '')}
+      ${kpiCard(s.open, '⚙️ ยังไม่ปิด', 'รอคัดกรอง / กำลังทำ / รอผู้แจ้ง')}
+      ${kpiCard(s.cancelled, '✖️ ยกเลิก', '')}
+    </div>
+    <div id="rpKpi" style="margin-top:16px"></div>
+    <div class="grid g2" style="margin-top:14px">
+      <div class="panel"><h3 style="font-size:15px">📈 รับคำขอตามประเภท</h3><canvas id="rpTypeChart" height="150"></canvas></div>
+      <div class="panel"><h3 style="font-size:15px">📅 จำนวนงานที่ปิดรายเดือน</h3><canvas id="admMonthChart" height="150"></canvas></div>
+    </div>
+    <div id="rpStaff" style="margin-top:14px"></div>
+    <div id="rpSat" style="margin-top:22px"></div>`;
+  renderReportKpi(d.metrics);
+  const bt = d.by_type || {};
+  drawBar('rpTypeChart', Object.keys(bt), Object.keys(bt).map(k=>bt[k]));
+  drawClosedMonthChart(d.metrics);
+  renderReportStaff(d.metrics);
+  renderReportSat(d.satisfaction);
+}
+/* "—" + คำอธิบายเมื่อชี้เมาส์ (กลุ่มที่ข้อมูลน้อย ห้ามแสดงเลขเฉลี่ย — SM-D38/D44) */
+function naMark(txt){ return `<span title="${esc(txt)}" style="color:var(--ink3);cursor:help">—</span>`; }
+/* ★ D44: ผลงานรายเจ้าหน้าที่ + ปิดงานตามประเภท */
+function renderReportStaff(m){
+  const el = $('rpStaff'); if(!el || !m) return;
+  const min = m.min_closed_required || 3;
+  const na = naMark('ข้อมูลยังน้อย (ปิดงานไม่ถึง ' + min + ' ใบ)');
+  const rows = m.by_assignee || [];
+  const table = rows.length ? `<div class="rtable">
+      <div class="rt-h"><span>เจ้าหน้าที่</span><span>ปิดแล้ว</span><span>เฉลี่ย มอบหมาย→ปิด</span><span>% ปิดหลังกำหนด</span></div>
+      ${rows.map(a=>`<div class="rt-r"><span>${esc(a.name||a.email)}</span><span><b>${a.closed_count}</b> ใบ</span><span>${a.avg_hours_assign_to_close==null?na:fmtHours(a.avg_hours_assign_to_close)}</span><span>${a.overdue_rate==null?na:(a.overdue_rate+'%')}</span></div>`).join('')}
+    </div><p class="help" style="margin-top:6px">— = ปิดงานไม่ถึง ${min} ใบ ระบบไม่คำนวณค่าเฉลี่ยเพื่อไม่ให้ตัวเลขชวนเข้าใจผิด · ข้อมูลนี้เห็นเฉพาะผู้ดูแลและผู้กลั่นกรอง</p>`
+    : `<p class="help">ยังไม่มีงานที่ปิดในช่วงนี้</p>`;
+  const bt = m.by_type || {};
+  el.innerHTML = `<div class="grid g2">
+    <div class="panel"><h3 style="font-size:15px">👥 ผลงานรายเจ้าหน้าที่</h3>${table}</div>
+    <div class="panel"><h3 style="font-size:15px">🗂️ ปิดงานตามประเภท</h3><canvas id="rpClosedTypeChart" height="150"></canvas></div>
+  </div>`;
+  drawBar('rpClosedTypeChart', Object.keys(bt), Object.keys(bt).map(k=>bt[k].closed_count||0));
+}
+/* ★ S24 / SM-D59: แดชบอร์ดความพึงพอใจ (ผู้ดูแล/ผู้กลั่นกรองเท่านั้น) */
+function renderReportSat(sa){
+  const el = $('rpSat'); if(!el || !sa) return;
+  const min = sa.min_required || 3;
+  const na = naMark('ข้อมูลยังน้อย (ประเมินไม่ถึง ' + min + ' รายการ)');
+  const pct = v => v == null ? na : (v + '%');
+  const head = `<div class="sec-head" style="margin-bottom:10px"><h2 style="font-size:17px">⭐ ความ<b>พึงพอใจ</b></h2><span class="rt">ISO 10002 · เห็นเฉพาะผู้ดูแล/ผู้กลั่นกรอง</span></div>`;
+  if(!sa.count){
+    el.innerHTML = head + `<div class="panel statecard"><div class="ico">⭐</div><h3>ยังไม่มีผลประเมินในช่วงนี้</h3><p>งานที่ปิดแล้ว ${sa.closed_count||0} ใบ · รอประเมิน ${sa.pending_count||0} ใบ</p></div>`;
+    return;
+  }
+  const dist = sa.dist || {};
+  const maxD = Math.max(1, ...[1,2,3,4,5].map(i=>dist[i]||0));
+  const distHtml = [5,4,3,2,1].map(i=>`<div class="wl"><span class="nm" style="width:52px">${i} ★</span><span class="pbar" style="flex:1"><i style="width:${Math.round((dist[i]||0)*100/maxD)}%"></i></span><span class="cnt">${dist[i]||0}</span></div>`).join('');
+  const byA = sa.by_assignee || [];
+  const byM = sa.by_month || {}; const mk = Object.keys(byM).sort();
+  const monthName = k => { const p = k.split('-'); return (TH_MONTH[parseInt(p[1],10)-1]||k) + ' ' + String(parseInt(p[0],10)+543).slice(-2); };
+  el.innerHTML = head + `
+   <div class="grid g4">
+     ${kpiCard(sa.avg==null?na:`${Number(sa.avg).toFixed(2)}<span style="font-size:13px;color:var(--ink3)">/5</span>`, '⭐ คะแนนเฉลี่ย', `จาก ${sa.count} การประเมิน`)}
+     ${kpiCard(sa.response_rate==null?'—':(sa.response_rate+'%'), '📨 อัตราตอบแบบประเมิน', `${sa.rated_closed} จาก ${sa.closed_count} งานที่ปิด`)}
+     ${kpiCard(sa.pending_count, '⏳ ยังไม่ประเมิน', 'งานที่ปิดแล้ว')}
+     ${kpiCard(sa.median_hours_close_to_rate==null?na:fmtHours(sa.median_hours_close_to_rate), '🕒 ปิดงาน → ประเมิน', 'ค่ากลาง (มัธยฐาน)')}
+   </div>
+   <div class="grid g2" style="margin-top:14px">
+     <div class="panel"><h3 style="font-size:15px">การกระจายคะแนน</h3>${distHtml}
+       <div class="msg info" style="margin-top:10px;font-size:12.5px">🔎 <b>เฝ้าระวังการประเมินแบบขอไปที</b> (ความเสี่ยงที่แจ้งไว้ตอนเปิดบังคับประเมินก่อนยื่นคำขอใหม่): ให้ 5 ดาว <b>${pct(sa.five_star_rate)}</b> · เขียนความเห็น <b>${pct(sa.comment_rate)}</b><br>ถ้า 5 ดาวพุ่งเข้าใกล้ 100% และแทบไม่มีคนเขียนความเห็น = สัญญาณว่าคนกดผ่าน ๆ</div>
+     </div>
+     <div class="panel"><h3 style="font-size:15px">รายเจ้าหน้าที่</h3>${byA.length?`<div class="rtable c3">
+        <div class="rt-h"><span>เจ้าหน้าที่</span><span>ประเมิน</span><span>เฉลี่ย</span></div>
+        ${byA.map(a=>`<div class="rt-r"><span>${esc(a.name||a.email)}</span><span>${a.count}</span><span>${a.avg==null?na:Number(a.avg).toFixed(2)}</span></div>`).join('')}</div>
+        <p class="help" style="margin-top:6px">— = ประเมินไม่ถึง ${min} รายการ</p>`:'<p class="help">ยังไม่มีข้อมูล</p>'}
+       ${mk.length?`<h3 style="font-size:15px;margin-top:14px">รายเดือน (เดือนที่ประเมิน)</h3><div class="rtable c3"><div class="rt-h"><span>เดือน</span><span>ประเมิน</span><span>เฉลี่ย</span></div>${mk.map(k=>`<div class="rt-r"><span>${esc(monthName(k))}</span><span>${byM[k].count}</span><span>${byM[k].avg==null?na:Number(byM[k].avg).toFixed(2)}</span></div>`).join('')}</div>`:''}
+     </div>
+   </div>
+   ${(sa.recent_comments||[]).length?`<div class="panel" style="margin-top:14px"><h3 style="font-size:15px">💬 ความเห็นล่าสุด</h3>${sa.recent_comments.map(c=>`<div class="rrow" style="display:block"><div><b style="color:#f0a92a">${'★'.repeat(Math.max(0,Math.min(5,c.rating|0)))}</b> <span>${esc(c.ticket_no)} · ${fmtDate(c.rated_at)}${c.assignee_name?' · '+esc(c.assignee_name):''}</span></div><div style="white-space:pre-wrap;margin-top:3px">${esc(c.comment)}</div></div>`).join('')}</div>`:''}`;
+}
+
+async function doExportCsv(fy){
+  try{
+    const params = (fy && String(fy) !== 'all') ? { fy: fy } : {};   // ★ S28: ไม่ส่ง = ทุกปีงบ (เหมือนเดิม)
+    const d=await apiA('exportCsv', params);
     const bin=atob(d.base64||''); const bytes=new Uint8Array(bin.length);
     for(let i=0;i<bin.length;i++) bytes[i]=bin.charCodeAt(i);
     const blob=new Blob([bytes],{type:d.mime||'text/csv'});
     const url=URL.createObjectURL(blob); const a=document.createElement('a'); a.href=url; a.download=d.filename||'tickets.csv'; document.body.appendChild(a); a.click(); a.remove(); URL.revokeObjectURL(url);
+    toast('ส่งออก CSV ' + (d.rows != null ? d.rows + ' รายการ' : 'เรียบร้อย'));
   }catch(err){ toast(err.msg||'ส่งออก CSV ไม่สำเร็จ'); }
 }
 
@@ -509,10 +724,10 @@ async function doExportCsv(){
 const STATUS_ORDER = ['NEW','RETURNED_INTAKE','ASSIGNED','PROGRESS','REVISION','CLOSED','CANCELLED'];
 const STATUS_GROUP_OPEN = ['ASSIGNED','PROGRESS','REVISION'];   // ใช้กับการ์ด "กำลังดำเนินการ"
 let ALLT = { rows:[], total:0, page:1, page_size:25, counts:null,
-             f:{ status:'', assignee:'', type:'', q:'', from:'', to:'', sort:'newest' } };
+             f:{ status:'', assignee:'', type:'', q:'', from:'', to:'', sort:'newest', fy:'' } };   // ★ S28 fy '' = ทุกปีงบ
 
 function allResetFilters(){
-  ALLT.f = { status:'', assignee:'', type:'', q:'', from:'', to:'', sort:'newest' };
+  ALLT.f = { status:'', assignee:'', type:'', q:'', from:'', to:'', sort:'newest', fy:'' };
   ALLT.page = 1; ALLT.counts = null;
 }
 /* เปิดหน้างานทั้งหมดพร้อม preset สถานะ (ใช้จากการ์ดสถิติบนแดชบอร์ด) */
@@ -522,6 +737,20 @@ function goAllTickets(status){
   go('alltickets', status ? { status: status } : null);
 }
 
+/* ★ S28: ปีงบที่เลือกได้ = ปีงบปัจจุบัน ย้อนถึงปีงบแรกของระบบ (2569) · ค่าเริ่มต้น "ทุกปีงบ"
+   ⚠️ ห้ามตั้งค่าเริ่มต้นเป็นปีปัจจุบัน — งานที่ยื่นปีก่อนแต่ยังค้างอยู่จะหายจากจอ (บทเรียน P2/SM-D34) */
+function allFyOptions(){
+  // รวมปีงบจาก 2 แหล่ง: นาฬิกาเครื่อง (ย้อนถึง 2569) + ปีงบที่เซิร์ฟเวอร์บอกว่ามีข้อมูลจริง (จากรายงาน ถ้าโหลดไว้แล้ว)
+  //   ⚠️ พึ่งนาฬิกาเครื่องอย่างเดียวไม่ได้ — เครื่องที่ตั้งเวลาเพี้ยนจะไม่มีตัวเลือกปีงบที่มีคำขออยู่จริง (เจอในการทดสอบ)
+  const set = {};
+  const cur = (REPORT.data && REPORT.data.current_fy) || thaiFiscalYear();
+  for(let y = Math.max(cur, thaiFiscalYear()); y >= 2569; y--) set[y] = true;
+  ((REPORT.data && REPORT.data.fiscal_years) || []).forEach(y => { set[y] = true; });
+  const years = Object.keys(set).map(Number).sort((a,b)=>b-a);
+  let o = `<option value="" ${!ALLT.f.fy?'selected':''}>— ทุกปีงบ —</option>`;
+  years.forEach(y => { o += `<option value="${y}" ${String(ALLT.f.fy)===String(y)?'selected':''}>ปีงบ ${y}${y===cur?' (ปัจจุบัน)':''}</option>`; });
+  return o;
+}
 function allAssigneeOptions(){
   const f = ALLT.f;
   return `<option value="">— ทุกคน —</option><option value="NONE" ${f.assignee==='NONE'?'selected':''}>⚪ ยังไม่มอบหมาย</option>` +
@@ -554,6 +783,7 @@ function allTicketsV(){
     <div class="allfilters" style="margin-top:14px">
       <div class="field" style="margin:0"><label class="fl" for="afAssignee">ผู้รับผิดชอบ</label><select id="afAssignee">${allAssigneeOptions()}</select></div>
       <div class="field" style="margin:0"><label class="fl" for="afType">ประเภทงาน</label><select id="afType"><option value="">— ทุกประเภท —</option>${typeKeys.map(t=>`<option value="${esc(t)}" ${f.type===t?'selected':''}>${esc(t)}</option>`).join('')}</select></div>
+      <div class="field" style="margin:0"><label class="fl" for="afFy">ปีงบประมาณ (ที่ยื่น)</label><select id="afFy">${allFyOptions()}</select></div>
       <div class="field" style="margin:0"><label class="fl" for="afFrom">ยื่นตั้งแต่วันที่</label><input type="date" id="afFrom" value="${esc(f.from)}"></div>
       <div class="field" style="margin:0"><label class="fl" for="afTo">ถึงวันที่</label><input type="date" id="afTo" value="${esc(f.to)}"></div>
       <div class="field" style="margin:0"><label class="fl" for="afQ">ค้นหา</label><input type="text" id="afQ" value="${esc(f.q)}" placeholder="เลขที่ / เรื่อง / ชื่อผู้แจ้ง" onkeydown="if(event.key==='Enter'){event.preventDefault();allSearch()}"></div>
@@ -562,7 +792,7 @@ function allTicketsV(){
     <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:14px;align-items:center">
       <button class="btn primary sm" onclick="allSearch()">🔎 ค้นหา</button>
       <button class="btn ghost sm" onclick="allClear()">↺ ล้างตัวกรอง</button>
-      <button class="btn ghost sm" style="margin-left:auto" onclick="doExportCsv()">⬇️ ส่งออก CSV</button>
+      <button class="btn ghost sm" style="margin-left:auto" onclick="doExportCsv(ALLT.f.fy)" title="ส่งออกตามปีงบที่เลือก (ทุกปีงบ = ทั้งหมด)">⬇️ ส่งออก CSV</button>
     </div>
   </div>
   <div id="allResult">${loadingCard('กำลังโหลดรายการงาน')}</div>`;
@@ -582,7 +812,7 @@ async function loadAllTickets(){
   try{
     const d = await apiA('allTickets', {
       status:f.status, assignee:f.assignee, type:f.type, q:f.q,
-      from:f.from, to:f.to, sort:f.sort, page:ALLT.page, page_size:ALLT.page_size
+      from:f.from, to:f.to, sort:f.sort, fy:f.fy || '', page:ALLT.page, page_size:ALLT.page_size
     });
     ALLT.rows = d.rows||[]; ALLT.total = d.total||0;
     ALLT.page = d.page||1;  ALLT.page_size = d.page_size||25;
@@ -645,6 +875,7 @@ function allSearch(){
   f.to       = $('afTo')       ? $('afTo').value : '';
   f.q        = $('afQ')        ? $('afQ').value.trim() : '';
   f.sort     = $('afSort')     ? $('afSort').value : 'newest';
+  f.fy       = $('afFy')       ? $('afFy').value : '';          // ★ S28
   ALLT.page = 1;
   loadAllTickets();
 }
@@ -653,6 +884,7 @@ function allClear(){
   ['afType','afFrom','afTo','afQ'].forEach(id=>{ if($(id)) $(id).value = ''; });
   if($('afAssignee')) $('afAssignee').innerHTML = allAssigneeOptions();
   if($('afSort')) $('afSort').value = 'newest';
+  if($('afFy')) $('afFy').innerHTML = allFyOptions();              // ★ S28 กลับเป็น "ทุกปีงบ"
   if($('allChips')) $('allChips').innerHTML = allChipsHtml();
   loadAllTickets();
 }
@@ -763,21 +995,141 @@ async function doReturn(no, stage){
   try{ await apiA(map[stage][0], map[stage][1]); closeM(); toast('ดำเนินการเรียบร้อยแล้ว'); refreshStaff(); }
   catch(err){ b.disabled=false; b.textContent='ยืนยัน'; if(e){ e.style.display=''; e.textContent=err.msg||'ไม่สำเร็จ'; } }
 }
+/* ★ SM-D55 / S21: ปิดงาน + แนบไฟล์หลักฐาน (ไม่บังคับ) → ระบบส่งให้ผู้แจ้งทางอีเมลปิดงาน (ลิงก์เสมอ + แนบไฟล์จริงถ้าไม่เกินเพดาน)
+   ลำดับ: แนบไฟล์ทีละไฟล์ (uploadAttachment เดิม · stage=close) → ครบแล้วจึงเรียก close
+   ⚠️ แนบไม่ผ่านไฟล์ไหน = หยุด ยังไม่ปิดงาน · ไฟล์ที่แนบสำเร็จแล้วถูกตัดออกจากรายการ (กดยืนยันซ้ำจะไม่แนบซ้ำ) */
+let CLOSEF = { no:'', files:[] };
 function openClose(no){
+  CLOSEF = { no: no, files: [] };
   openM(`<div class="mh"><h3>✅ ปิดงาน</h3><button class="mx" onclick="closeM()">✕</button></div>
-   <div class="mb"><div class="msg ok">${esc(no)} — สรุปผลการดำเนินงานก่อนปิด (ระบบส่งอีเมลเชิญประเมินให้ผู้แจ้ง)</div>
-   <div class="field"><label class="fl" for="cNote">สรุปการปิดงาน <span class="req">*</span></label><textarea id="cNote" placeholder="เช่น จัดทำหนังสือเสร็จ ส่งไฟล์ให้ผู้แจ้งแล้ว"></textarea></div>
+   <div class="mb"><div class="msg ok">${esc(no)} — สรุปผลการดำเนินงานก่อนปิด (ระบบส่งอีเมลแจ้งผู้แจ้ง + เชิญประเมิน)</div>
+   <div class="field"><label class="fl" for="cNote">สรุปการปิดงาน <span class="req">*</span></label><textarea id="cNote" placeholder="เช่น จัดทำหนังสือเสร็จ เสนอผู้บริหารลงนามแล้ว เลขที่หนังสือ ..."></textarea></div>
+   <div class="field"><label class="fl">ไฟล์หลักฐาน (ถ้ามี)</label>
+     <div class="upzone" tabindex="0" role="button" aria-label="เลือกไฟล์หลักฐาน" onclick="document.getElementById('cFile').click()" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();document.getElementById('cFile').click()}">📎 คลิกเพื่อเลือกไฟล์ผลงาน/หลักฐาน<div class="help">${esc(uploadHint())}</div></div>
+     <input type="file" id="cFile" multiple style="display:none" onchange="onPickCloseFiles(this)">
+     <div id="cFileList"></div><div class="err-tx" id="eCloseFile" style="display:none"></div>
+     <div class="help">เช่น สแกนหนังสือที่ลงนามแล้ว / ไฟล์ร่างสุดท้าย — ระบบ<b>ส่งให้ผู้แจ้งทางอีเมลปิดงาน</b>และแสดงในหน้าติดตาม · <b>ไม่ใช่</b>ที่แนบไฟล์ภายในทีม (ผู้แจ้งเห็นทุกไฟล์ที่แนบตรงนี้)</div></div>
    <div class="msg err" id="cErr" style="display:none"></div>
    <button class="btn primary" id="cBtn" onclick="doClose('${esc(no)}')">ยืนยันปิดงาน</button></div>`);
+}
+function onPickCloseFiles(inp){
+  const maxMb = (CFG && CFG.max_upload_mb) ? Number(CFG.max_upload_mb) : 10;
+  const allowed = (CFG && CFG.allowed_mime && CFG.allowed_mime.length) ? CFG.allowed_mime : null;
+  const errs = [];
+  const job = CLOSEF;   // ไฟล์ที่อ่านเสร็จทีหลังต้องเข้ากล่องของใบที่เลือกไฟล์ ไม่ใช่กล่องที่เปิดอยู่ตอนนั้น
+  Array.prototype.forEach.call(inp.files || [], file=>{
+    if(file.size > maxMb*1048576){ errs.push(`${file.name}: ใหญ่เกิน ${maxMb} MB`); return; }
+    if(allowed && file.type && allowed.indexOf(file.type) === -1){ errs.push(`${file.name}: ชนิดไฟล์ไม่รองรับ`); return; }
+    const reader = new FileReader();
+    reader.onload = ()=>{ job.files.push({ name:file.name, mime:file.type||'application/octet-stream', base64:reader.result, size:file.size }); if(CLOSEF === job) renderCloseFiles(); };
+    reader.onerror = ()=>{ const b=$('eCloseFile'); if(b){ b.style.display=''; b.textContent = file.name + ': อ่านไฟล์ไม่สำเร็จ'; } };
+    reader.readAsDataURL(file);
+  });
+  inp.value = '';
+  const b = $('eCloseFile'); if(b){ if(errs.length){ b.style.display=''; b.textContent = errs.join(' · '); } else { b.style.display='none'; b.textContent=''; } }
+}
+function removeCloseFile(i){ CLOSEF.files.splice(i,1); renderCloseFiles(); }
+function renderCloseFiles(){
+  const el = $('cFileList'); if(!el) return;
+  el.innerHTML = CLOSEF.files.map((f,i)=>`<div class="fileitem">📄 <span class="fn">${esc(f.name)}</span> <span style="color:var(--ink3)">${fmtBytes(f.size)}</span><button class="x" type="button" aria-label="ลบไฟล์" onclick="removeCloseFile(${i})">✕</button></div>`).join('');
 }
 async function doClose(no){
   const note=$('cNote')?$('cNote').value.trim():'';
   const e=$('cErr'); if(e) e.style.display='none';
   if(!note){ if(e){ e.style.display=''; e.textContent='กรุณากรอกสรุปการปิดงาน'; } return; }
-  const b=$('cBtn'); b.disabled=true; b.innerHTML='<span class="spin"></span>กำลังปิดงาน...';
-  try{ await apiA('close',{ticket_no:no,closing_note:note}); closeM(); toast('ปิดงานเรียบร้อยแล้ว'); refreshStaff(); }
-  catch(err){ b.disabled=false; b.textContent='ยืนยันปิดงาน'; if(e){ e.style.display=''; e.textContent=err.msg||'ปิดงานไม่สำเร็จ'; } }
+  const b=$('cBtn'); b.disabled=true;
+  // 🚨 ผูกงานนี้กับรายการไฟล์ของ "ใบนี้" ตั้งแต่ต้น — ระหว่างแนบไฟล์ ผู้ใช้กด Esc แล้วเปิดกล่องปิดงานใบอื่นได้
+  //    (openClose แทนที่ CLOSEF) ถ้ายังอ่านจาก CLOSEF ตรง ๆ ไฟล์ของใบที่ 2 จะถูกแนบเข้าใบนี้แล้วส่งอีเมลให้ผู้แจ้งผิดคน
+  const job = CLOSEF;
+  // (1) แนบหลักฐานทีละไฟล์ — ไฟล์ที่ผ่านแล้วตัดออกจากรายการทันที (กดซ้ำจะไม่แนบซ้ำ)
+  const total = job.files.length; let sent = 0;
+  while(job.files.length){
+    const f = job.files[0];
+    b.innerHTML = `<span class="spin"></span>กำลังแนบไฟล์ ${sent+1}/${total}...`;
+    try{
+      await apiA('uploadAttachment', { ticket_no:no, stage:'close', name:(AUTH.user && AUTH.user.name) || '',
+                                       file:{ name:f.name, mime:f.mime, base64:f.base64 } });
+      job.files.shift(); sent++; if(CLOSEF === job) renderCloseFiles();
+    }catch(err){
+      b.disabled=false; b.textContent='ยืนยันปิดงาน';
+      if(e){ e.style.display=''; e.textContent = 'แนบไฟล์ "' + f.name + '" ไม่สำเร็จ: ' + ((err && err.msg) || 'ลองใหม่อีกครั้ง') + ' — งานยังไม่ถูกปิด' + (sent ? ` (แนบสำเร็จแล้ว ${sent} ไฟล์ กดยืนยันอีกครั้งจะแนบเฉพาะที่เหลือ)` : ''); }
+      if(CLOSEF !== job) toast(`แนบไฟล์ของ ${no} ไม่สำเร็จ — ${no} ยังไม่ถูกปิด`);   // กล่องของใบนี้ถูกปิดไปแล้ว → แจ้งทาง toast แทน
+      return;
+    }
+  }
+  // (2) ปิดงาน → backend ส่งอีเมลปิดงานพร้อมหลักฐาน
+  b.innerHTML='<span class="spin"></span>กำลังปิดงาน...';
+  try{ await apiA('close',{ticket_no:no,closing_note:note}); if(CLOSEF === job) closeM(); toast(sent ? `ปิด ${no} แล้ว · ส่งหลักฐาน ${sent} ไฟล์ให้ผู้แจ้งทางอีเมล` : `ปิด ${no} เรียบร้อยแล้ว`); refreshStaff(); }
+  catch(err){ b.disabled=false; b.textContent='ยืนยันปิดงาน'; if(e){ e.style.display=''; e.textContent=err.msg||'ปิดงานไม่สำเร็จ'; } if(CLOSEF !== job) toast(`ปิด ${no} ไม่สำเร็จ: ${(err && err.msg) || 'ลองใหม่อีกครั้ง'}`); }
 }
+
+/* ============================================================
+   5.9) ★ SM-D57 (S23) — ผู้แจ้ง "จดจำเครื่องนี้" (opt-in · ผู้แจ้งติ๊กเอง)
+   · token ผู้แจ้งเก็บคนละที่กับ token เจ้าหน้าที่ (คนละ key ในเครื่อง · คนละชีตฝั่ง backend) → ใช้แทนกันไม่ได้
+   · ใช้ข้ามขั้น OTP ตอนยื่นคำขอ + ดู "คำขอทั้งหมดของฉัน" (S27)
+   · หมดอายุ/ถูกยกเลิก/ผู้ดูแลปิดฟีเจอร์ → ล้างทิ้งแล้วกลับไปใช้ OTP ตามเดิม (ผู้ใช้ไม่ติดค้าง)
+   ============================================================ */
+const REQ_TOKEN_KEY = 'sm_req_token';
+let REQ_SESS = null;     // {token, email, name, department, expires_at}
+function reqSessLoad(){
+  try{ const o = JSON.parse(localStorage.getItem(REQ_TOKEN_KEY) || 'null'); return (o && o.token && o.email) ? o : null; }
+  catch(e){ return null; }
+}
+function reqSessSave(o){ REQ_SESS = o; try{ localStorage.setItem(REQ_TOKEN_KEY, JSON.stringify(o)); }catch(e){} }
+function reqSessClear(){ REQ_SESS = null; try{ localStorage.removeItem(REQ_TOKEN_KEY); }catch(e){} }
+function rememberOn(){ return !!(CFG && String(CFG.requester_remember_enabled || '').toLowerCase() === 'yes'); }
+function rememberDays(){ return (CFG && Number(CFG.requester_remember_days)) || 30; }
+function sameEmail(a, b){ const x = String(a||'').trim().toLowerCase(); return !!x && x === String(b||'').trim().toLowerCase(); }
+/** หาผู้แจ้งในรายชื่อด้วยอีเมล — ⚠️ ห้ามจำเป็นลำดับ (reqIdx) ข้ามเวลา: รายชื่อเรียงตามชื่อ เพิ่มคนใหม่แล้วลำดับเลื่อน */
+function reqIdxByEmail(em){ return REQUESTERS.findIndex(r => sameEmail(r.email, em)); }
+function isReqTokenErr(err){ return !!(err && err.error && String(err.error).indexOf('REQ_SESSION_') === 0); }
+function reqRememberedFor(email){ return !!(REQ_SESS && sameEmail(REQ_SESS.email, email)); }
+
+/** เปิดหน้าเว็บ: ตรวจ token ที่จดจำไว้แบบเงียบ ๆ — ใช้ไม่ได้แล้ว = ล้าง · เน็ตหลุด = เก็บไว้ก่อน (ไม่ลงโทษคนเน็ตช้า) */
+async function restoreRequesterSession(){
+  if(API_URL === API_PLACEHOLDER || !REQ_SESS) return;
+  const o = REQ_SESS;
+  try{
+    const d = await api('requesterSessionCheck', { requester_token: o.token });
+    reqSessSave(Object.assign({}, o, { email: d.email || o.email, name: d.name || o.name || '', department: d.department || o.department || '', expires_at: d.expires_at || o.expires_at }));
+    if(!AUTH.user) buildBars();
+    refreshReqBanner();
+  }catch(err){
+    if(err && (err.error === 'NETWORK' || err.error === 'TIMEOUT')) return;
+    reqSessClear();
+    if(!AUTH.user) buildBars();
+    refreshReqBanner();
+    if(S.screen === 'track') renderMyReqBox();
+  }
+}
+/** "ไม่ใช่ฉัน / ออกจากเครื่องนี้" — ลบทั้งในเครื่องและฝั่งเซิร์ฟเวอร์ · ฟอร์มที่กรอกค้างยังอยู่ แต่ชื่อผู้แจ้งถูกล้าง */
+function reqForget(){
+  const o = REQ_SESS;
+  if(!o) return;
+  reqSessClear();
+  MYREQ = { data:null, loading:false, err:'' };
+  api('requesterLogout', { requester_token: o.token }).catch(()=>{});
+  // ฟอร์มที่ "กำลังกรอก" (ขั้น 1) ในนามคนที่ถูกลืม → ล้างชื่อผู้แจ้ง ให้คนที่ใช้เครื่องต่อเลือกชื่อตัวเอง
+  // ⚠️ เฉพาะขั้น 1 เท่านั้น — ขั้น 3 (ยื่นสำเร็จแล้ว) ห้าม saveDraft ไม่งั้นเรื่องที่ยื่นไปแล้วจะกลับมาเป็นร่าง = เสี่ยงยื่นซ้ำ
+  if(FORM.step === 1 && sameEmail(FORM.fields.requester_email, o.email)){
+    if(S.screen === 'form') readStep1();                           // เก็บสิ่งที่พิมพ์ค้างไว้ก่อนวาดใหม่
+    FORM.fields.reqIdx = null; FORM.fields.requester_email = ''; FORM.fields.requester_name = ''; FORM.fields.department = '';
+    saveDraft();
+  }
+  toast('ออกจากเครื่องนี้แล้ว — ครั้งถัดไปต้องยืนยันด้วยรหัส OTP');
+  render();
+}
+/** กล่อง "ยื่นในนาม ..." บนฟอร์ม (วาดใหม่เฉพาะกล่อง — ไม่วาดทั้งฟอร์มเพื่อไม่ให้สิ่งที่พิมพ์ค้างหาย) */
+function reqBannerInner(){
+  if(!REQ_SESS) return '';
+  const sel = FORM.fields && FORM.fields.requester_email;
+  if(!sel || sameEmail(sel, REQ_SESS.email)){
+    return `<div class="msg ok">🔓 <b>เครื่องนี้จดจำท่านไว้แล้ว</b> — ยื่นในนาม <b>${esc(REQ_SESS.name || REQ_SESS.email)}</b> ได้เลย <b>ไม่ต้องใช้รหัส OTP</b> · จดจำไว้ถึง ${fmtDate(REQ_SESS.expires_at)}
+      <div style="margin-top:8px"><button class="btn ghost sm" type="button" onclick="reqForget()">ไม่ใช่ฉัน / ออกจากเครื่องนี้</button></div></div>`;
+  }
+  return `<div class="msg info">ℹ️ ท่านเลือกผู้แจ้งคนอื่น (ไม่ใช่ ${esc(REQ_SESS.name || REQ_SESS.email)} ที่เครื่องนี้จดจำไว้) — ระบบจะส่งรหัส OTP ไปที่อีเมลของผู้แจ้งที่เลือกเพื่อยืนยันตามปกติ</div>`;
+}
+function refreshReqBanner(){ const b = $('reqBanner'); if(b) b.innerHTML = reqBannerInner(); }
 
 /* ============================================================
    6) หน้า FORM — wizard 3 สเต็ป (F1 + SM-D20/D21/D23)
@@ -786,7 +1138,15 @@ async function doClose(no){
 let FORM = newForm();
 function newForm(){
   return { step:1, files:[], fields:{}, otpEmail:'', submitting:false, result:null, resendLeft:0, timer:null,
-           otp:'', draftChecked:false, draftRestored:false };   // ★ SM-D49
+           otp:'', draftChecked:false, draftRestored:false,   // ★ SM-D49
+           viaToken:false, remember:false,                    // ★ SM-D57 ยื่นด้วย "จดจำเครื่องนี้" / ติ๊กจดจำตอนกรอก OTP
+           chainFrom:'', templateFrom:'',                     // ★ SM-D58 ต่อจากใบไหน · ★ S27 คัดลอกจากใบไหน
+           submitId:'' };                                     // ★ SM-D57 รหัสสุ่มของฟอร์มนี้ (กันคำขอซ้ำเมื่อหมดเวลาแล้วกดส่งอีกครั้ง)
+}
+/** รหัสสุ่มต่อ 1 ฟอร์ม — ส่งไปกับทุกครั้งที่กดส่งฟอร์มนี้ · ฟอร์มใหม่ (newForm) = รหัสใหม่ */
+function newSubmitId(){
+  try{ if(window.crypto && crypto.randomUUID) return crypto.randomUUID(); }catch(e){}
+  return Date.now().toString(36) + '-' + Math.random().toString(36).slice(2) + Math.random().toString(36).slice(2);
 }
 
 /* ============================================================
@@ -847,7 +1207,12 @@ function formStep1(){
   const draftBox = FORM.draftRestored
     ? `<div class="msg info">💾 <b>กู้ข้อมูลที่กรอกค้างไว้ให้แล้ว</b> — ตรวจความถูกต้องอีกครั้งก่อนส่ง · <b>ไฟล์แนบต้องเลือกใหม่</b> (ระบบเก็บไฟล์ไว้ในเครื่องไม่ได้) <button class="btn ghost sm" style="margin-left:6px" onclick="discardDraft()">ล้างแบบฟอร์ม</button></div>`
     : '';
-  return `${draftBox}
+  // ★ SM-D58: มาจากปุ่ม "ยื่นเรื่องถัดไป" · ★ S27: มาจากปุ่ม "ใช้เป็นแม่แบบ"
+  const chainBox = FORM.chainFrom
+    ? `<div class="msg info">➕ <b>ยื่นเรื่องถัดไป</b> ต่อจาก ${esc(FORM.chainFrom)} — ผู้แจ้งคนเดิม · กรอกเรื่องใหม่ได้เลย (เรื่องก่อนหน้าไม่ถูกแก้ไข)</div>` : '';
+  const tplBox = FORM.templateFrom
+    ? `<div class="msg info">📝 <b>คัดลอกข้อมูลจากคำขอ ${esc(FORM.templateFrom)}</b> — แก้ไขได้ก่อนส่ง · <b>กำหนดส่ง</b>ต้องเลือกใหม่ · <b>ไฟล์แนบ</b>ต้องแนบใหม่ · คำขอเดิม<b>ไม่ถูกแก้ไข</b> (ยื่นแล้วได้เลขที่คำขอใหม่)</div>` : '';
+  return `${draftBox}${chainBox}${tplBox}<div id="reqBanner">${reqBannerInner()}</div>
   <div class="field"><label class="fl" for="fReq">ผู้แจ้ง <span class="req">*</span></label>
     <select id="fReq" onchange="fillReq()"><option value="">— เลือกชื่อของท่าน —</option>${
       REQUESTERS.map((r,i)=>`<option value="${i}" ${String(f.reqIdx)===String(i)?'selected':''}>${esc(r.name)}${r.department?' · '+esc(r.department):''}</option>`).join('')
@@ -897,6 +1262,7 @@ function formStep2(){
   <p>ระบบส่งรหัส 6 หลักไปที่ <b style="color:var(--green)">${esc(maskEmailC(em))}</b><br>กรอกรหัสเพื่อยืนยันว่าเป็นผู้ยื่นตัวจริง</p>
   <div class="otp-row" id="otpRow">${[0,1,2,3,4,5].map(i=>`<input maxlength="1" inputmode="numeric" autocomplete="one-time-code" aria-label="รหัสหลักที่ ${i+1}" data-i="${i}">`).join('')}</div>
   <div class="help">ไม่ได้รับรหัส? <a href="#" id="resendLink" onclick="return formResendOtp()">ส่งใหม่อีกครั้ง</a></div>
+  ${rememberBoxHtml('fRemember', FORM.remember)}
   <div class="msg err" id="otpErr" style="display:none;text-align:left"></div>
   <div style="margin-top:16px;display:flex;gap:8px;justify-content:center;flex-wrap:wrap">
     <button class="btn ghost" onclick="formBackTo1()">← กลับไปแก้</button>
@@ -904,14 +1270,50 @@ function formStep2(){
   </div></div>`;
 }
 
+/** ★ SM-D57 — ช่องติ๊ก "จดจำเครื่องนี้" (ใช้ 2 ที่: ขั้น OTP ของฟอร์ม + กล่องเข้าดูคำขอของฉัน) · ผู้ดูแลปิดฟีเจอร์ = ไม่แสดง */
+function rememberBoxHtml(id, checked){
+  if(!rememberOn()) return '';
+  return `<label class="remember" for="${id}"><input type="checkbox" id="${id}" ${checked?'checked':''}>
+    <span>จดจำเครื่องนี้ไว้ ${rememberDays()} วัน — ครั้งถัดไปยื่นคำขอและดูคำขอของท่านได้<b>โดยไม่ต้องใช้รหัส OTP</b></span></label>
+  <div class="help remember-help">⚠️ <b>อย่าติ๊ก</b>ถ้าเป็นคอมพิวเตอร์ที่ใช้ร่วมกับคนอื่น — ใครใช้เครื่องนี้ต่อจะยื่นคำขอในนามของท่านได้ · ยกเลิกได้ทุกเมื่อด้วยปุ่ม "ไม่ใช่ฉัน / ออกจากเครื่องนี้"</div>`;
+}
+
 function formStep3(){
   const r = FORM.result || {};
   const failed = (r.attachments_failed && r.attachments_failed.length)
     ? `<div class="msg warn" style="text-align:left">⚠️ มีไฟล์แนบบางไฟล์อัปโหลดไม่สำเร็จ: ${r.attachments_failed.map(x=>esc(x.name||'')+' ('+esc(x.error||'')+')').join(', ')} — ท่านสามารถแนบใหม่ในหน้าติดตาม</div>` : '';
+  // ★ SM-D57: ผลการติ๊ก "จดจำเครื่องนี้"
+  const rememberMsg = r.requester_token
+    ? `<div class="msg ok" style="text-align:left">🔓 <b>จดจำเครื่องนี้แล้ว</b> ถึง ${fmtDate(r.requester_token_expires_at)} — ครั้งถัดไปยื่นคำขอได้โดยไม่ต้องใช้รหัส OTP · ถ้าเป็นเครื่องที่ใช้ร่วมกับคนอื่น กดปุ่ม "ไม่ใช่ฉัน / ออกจากเครื่องนี้" ในหน้ายื่นคำขอ</div>`
+    : (r.remember_failed ? `<div class="msg warn" style="text-align:left">⚠️ ยื่นคำขอสำเร็จแล้ว แต่<b>จดจำเครื่องนี้ไม่สำเร็จ</b> — ครั้งถัดไปใช้รหัส OTP ตามปกติ</div>` : '');
+  // ★ SM-D57: ส่งซ้ำหลังหมดเวลา แต่ครั้งก่อนบันทึกสำเร็จไปแล้ว → เซิร์ฟเวอร์คืนผลใบเดิม (ไม่สร้างซ้ำ)
+  const replayMsg = r.replayed
+    ? `<div class="msg info" style="text-align:left">ℹ️ <b>คำขอนี้เข้าระบบไว้แล้วตั้งแต่ครั้งที่กดส่งก่อนหน้า</b> (ตอนนั้นการเชื่อมต่อหมดเวลา) — ระบบ<b>ไม่ได้สร้างคำขอซ้ำ</b> · เลขที่ด้านบนคือใบเดิม</div>` : '';
+  // ★ SM-D58: ยื่นเรื่องถัดไปในนามผู้แจ้งคนเดิม
+  const who = FORM.fields.requester_name || FORM.fields.requester_email || '';
+  const noOtpNext = reqRememberedFor(FORM.fields.requester_email);
   return `
   <div class="statecard"><div class="ok-ring">✓</div><h3 style="color:var(--green)">ส่งคำขอเรียบร้อยแล้ว</h3><p>เลขที่คำขอของท่านคือ</p><div class="bignum">${esc(r.ticket_no||'—')}</div>
-  <p>ระบบส่งอีเมลยืนยันพร้อมลิงก์ติดตามให้แล้ว เจ้าหน้าที่จะพิจารณาโดยเร็ว</p>${failed}
-  <div style="display:flex;gap:8px;justify-content:center;flex-wrap:wrap"><button class="btn primary" onclick="goTrackFromResult()">🔎 ติดตามสถานะ</button><button class="btn ghost" onclick="formReset()">ส่งคำขอใหม่</button></div></div>`;
+  <p>ระบบส่งอีเมลยืนยันพร้อมลิงก์ติดตามให้แล้ว เจ้าหน้าที่จะพิจารณาโดยเร็ว</p>${replayMsg}${failed}${rememberMsg}
+  <div style="display:flex;gap:8px;justify-content:center;flex-wrap:wrap">
+    <button class="btn primary" id="btnNext" onclick="formNext()">➕ ยื่นเรื่องถัดไป (ผู้แจ้งคนเดิม)</button>
+    <button class="btn ghost" onclick="goTrackFromResult()">🔎 ติดตามสถานะ</button>
+    <button class="btn ghost" onclick="formReset()">ส่งคำขอใหม่ (เปลี่ยนผู้แจ้ง)</button></div>
+  <div class="help" style="margin-top:10px">"ยื่นเรื่องถัดไป" = ยื่นอีกเรื่องในนาม <b>${esc(who)}</b> โดยไม่ต้องเลือกชื่อใหม่${noOtpNext ? ' และ<b>ไม่ต้องใช้รหัส OTP</b>' : ' (ต้องยืนยันด้วยรหัส OTP อีกครั้ง)'} — <b>ไม่ใช่</b>การแก้ไขเรื่องที่เพิ่งยื่น</div></div>`;
+}
+
+/* ★ SM-D58 (S22) — "ยื่นเรื่องถัดไป": คงผู้แจ้งคนเดิม (หาจากอีเมล ไม่ใช้ลำดับในรายชื่อ) · ล้างเรื่อง/รายละเอียด/ไฟล์/กำหนดส่ง
+   ⚠️ ไม่ใช่ตะกร้า (มติ SM-D58): ยื่นทีละใบ ใบละเลขที่ — KPI/การมอบหมายรายใบยังถูกต้อง */
+function formNext(){
+  const f = FORM.fields || {};
+  const keep = { requester_email: f.requester_email || '', requester_name: f.requester_name || '', department: f.department || '' };
+  const prevNo = (FORM.result && FORM.result.ticket_no) || '';
+  stopResendTimer(); clearDraft();
+  FORM = newForm(); FORM.draftChecked = true; FORM.chainFrom = prevNo;
+  const i = reqIdxByEmail(keep.requester_email);
+  if(i >= 0) FORM.fields = Object.assign({ reqIdx: String(i) }, keep);
+  render();
+  const s = $('fSubject'); if(s) s.focus();
 }
 
 /* ปิดบังอีเมลบางส่วนฝั่ง client (กันแสดงเต็มบนจอ) */
@@ -930,6 +1332,10 @@ function formAfter(){
     // ⚠️ ต้องมี REQUESTERS.length ด้วย — ตอน render รอบแรก config ยังโหลดไม่เสร็จ (REQUESTERS ว่าง)
     //    ถ้าเรียก fillReq() ตอนนั้น มันจะเข้าเงื่อนไข "ไม่พบชื่อ" แล้ว **ล้าง** ชื่อ/อีเมลของร่างที่เพิ่งกู้มาทิ้ง
     //    (เจอจริงตอนทดสอบใน browser — ร่างกลับมาแต่ช่องผู้แจ้งว่าง) · config มาแล้วจะ render ซ้ำเองและเข้าตรงนี้อีกรอบ
+    // ★ SM-D57: เครื่องนี้จดจำผู้แจ้งไว้ + ฟอร์มยังไม่ได้เลือกชื่อ → เลือกชื่อนั้นให้เลย (เปลี่ยนเป็นคนอื่นได้ตามเดิม)
+    if(REQ_SESS && FORM.fields.reqIdx == null && !FORM.fields.requester_email && REQUESTERS.length){
+      const ri = reqIdxByEmail(REQ_SESS.email); if(ri >= 0) FORM.fields.reqIdx = String(ri);
+    }
     if(FORM.fields.reqIdx != null && $('fReq') && REQUESTERS.length){ $('fReq').value = FORM.fields.reqIdx; fillReq(); }
     renderFileList();
     wireDropzone();
@@ -945,6 +1351,7 @@ function fillReq(){
   if(i === '' || !REQUESTERS[i]){
     box.style.display='none'; FORM.fields.reqIdx=null; FORM.fields.requester_email=''; FORM.fields.requester_name=''; FORM.fields.department='';
     checkPendingSatisfaction('');            // ★ SM-D49: ล้างคำเตือนของคนก่อนหน้า
+    refreshReqBanner();                      // ★ SM-D57
     saveDraft(); return;
   }
   const r = REQUESTERS[i];
@@ -956,6 +1363,7 @@ function fillReq(){
   box.innerHTML = r.email
     ? `✉️ <b>${esc(r.email)}</b> · 🏢 ${esc(r.department||'-')}`
     : `⚠️ <b style="color:var(--red)">ไม่มีอีเมลในระบบ</b> — ส่ง OTP ไม่ได้ โปรดแจ้งผู้ดูแลเพิ่มอีเมล`;
+  refreshReqBanner();                        // ★ SM-D57: เลือกคนที่จดจำไว้ = ไม่ต้อง OTP · เลือกคนอื่น = บอกว่าต้อง OTP
   saveDraft();
   checkPendingSatisfaction(r.email || '');   // ★ SM-D49: เตือนล่วงหน้าว่ามีประเมินค้างกี่รายการ
 }
@@ -1063,6 +1471,9 @@ async function formSubmitStep1(){
   clearFieldErr('formErr');
   readStep1();
   if(!validateStep1()) return;
+  // ★ SM-D57: เครื่องนี้จดจำผู้แจ้งคนนี้ไว้ → ยื่นเลย ไม่ต้องขอรหัส OTP
+  if(reqRememberedFor(FORM.fields.requester_email)) return formSubmitWithToken();
+  FORM.viaToken = false;
   const btn = $('btnStep1');
   btn.disabled = true; btn.innerHTML = '<span class="spin"></span>กำลังส่งรหัส OTP...';
   try{
@@ -1077,9 +1488,36 @@ async function formSubmitStep1(){
 }
 function formBackTo1(){ stopResendTimer(); FORM.step = 1; render(); }
 
+/** ★ SM-D57 — ยื่นด้วย token "จดจำเครื่องนี้" (ข้ามสเต็ป OTP) · token ใช้ไม่ได้แล้ว → ล้าง แล้วไปทาง OTP ตามปกติให้เอง */
+async function formSubmitWithToken(){
+  const btn = $('btnStep1');
+  if(btn){ btn.disabled = true; btn.innerHTML = '<span class="spin"></span>กำลังส่งคำขอ...'; }
+  FORM.viaToken = true; FORM.otp = ''; FORM.remember = false;
+  try{
+    const data = await api('submitTicket', buildTicketPayload(''));
+    // 🚨 SM-D49: ด่านบังคับประเมินยังทำงานกับทาง token ด้วย — เช็ก data.gate ก่อนเสมอ
+    if(data && data.gate === 'SATISFACTION_REQUIRED'){
+      if(btn){ btn.disabled = false; btn.textContent = 'ส่งคำขอ →'; }
+      openGateModal(data.pending || []);
+      return;
+    }
+    finishSubmit(data);
+  }catch(err){
+    FORM.viaToken = false;
+    if(btn){ btn.disabled = false; btn.textContent = 'ส่งคำขอ →'; }
+    if(isReqTokenErr(err)){
+      reqSessClear(); buildBars(); refreshReqBanner();
+      toast(err.msg || 'เครื่องนี้ใช้การจดจำไม่ได้แล้ว — ขอรหัส OTP แทน');
+      return formSubmitStep1();            // REQ_SESS ถูกล้างแล้ว → ไปทาง OTP (ไม่วนซ้ำ)
+    }
+    fieldErr('formErr', err.msg || 'ส่งคำขอไม่สำเร็จ');
+  }
+}
+
 /* ---- OTP UX ---- */
-function wireOtp(){
-  const inputs = Array.prototype.slice.call(document.querySelectorAll('#otpRow input'));
+/** @param {string} [rowSel] ★ SM-D57: ช่อง OTP แถวอื่น (เช่น '#rlOtpRow' ในกล่อง "คำขอทั้งหมดของฉัน") · ไม่ส่ง = '#otpRow' เดิม */
+function wireOtp(rowSel){
+  const inputs = Array.prototype.slice.call(document.querySelectorAll((rowSel || '#otpRow') + ' input'));
   inputs.forEach((el, idx)=>{
     el.addEventListener('input', ()=>{ el.value = el.value.replace(/\D/g,'').slice(0,1); if(el.value && inputs[idx+1]) inputs[idx+1].focus(); });
     el.addEventListener('keydown', e=>{ if(e.key==='Backspace' && !el.value && inputs[idx-1]) inputs[idx-1].focus(); });
@@ -1092,7 +1530,7 @@ function wireOtp(){
   });
   if(inputs[0]) inputs[0].focus();
 }
-function gatherOtp(){ return Array.prototype.map.call(document.querySelectorAll('#otpRow input'), el=>el.value).join(''); }
+function gatherOtp(rowSel){ return Array.prototype.map.call(document.querySelectorAll((rowSel || '#otpRow') + ' input'), el=>el.value).join(''); }
 function startResendTimer(){
   stopResendTimer();
   FORM.resendLeft = 60;
@@ -1117,7 +1555,7 @@ async function formResendOtp(){
 /** สร้าง payload ของ submitTicket — ใช้ 2 ที่ (ยืนยัน OTP ครั้งแรก + กด "ยื่นคำขอต่อ" หลังประเมิน) */
 function buildTicketPayload(otp){
   const f = FORM.fields;
-  return {
+  const p = {
     requester_email: f.requester_email, requester_name: f.requester_name, department: f.department,
     subject: f.subject, type: f.type, subtype: f.subtype || '',
     note: f.note || '', remark: f.remark || '',          // ★ SM-D48
@@ -1125,6 +1563,13 @@ function buildTicketPayload(otp){
     type_other: f.type_other || '', subtype_other: f.subtype_other || '',
     attachments: FORM.files.map(x=>({ name:x.name, mime:x.mime, base64:x.base64 }))
   };
+  // ★ SM-D57: ทาง token ส่ง requester_token แทน otp · ทาง OTP ส่ง remember เมื่อผู้แจ้งติ๊ก "จดจำเครื่องนี้"
+  if(FORM.viaToken && REQ_SESS){ p.otp = ''; p.requester_token = REQ_SESS.token; }
+  else if(FORM.remember) p.remember = true;
+  // ★ SM-D57: รหัสฟอร์มเดิมทุกครั้งที่กดส่งฟอร์มนี้ → หน้าเว็บหมดเวลาแต่เซิร์ฟเวอร์บันทึกไปแล้ว กดอีกครั้งจะได้ใบเดิม ไม่ได้ใบซ้ำ
+  if(!FORM.submitId) FORM.submitId = newSubmitId();
+  p.client_submit_id = FORM.submitId;
+  return p;
 }
 
 /** ยื่นสำเร็จ → ไปจอ "สำเร็จ" + ล้างร่างที่เก็บไว้ */
@@ -1132,6 +1577,14 @@ function finishSubmit(data){
   FORM.result = data;
   stopResendTimer();
   clearDraft();                 // ★ SM-D49: ยื่นสำเร็จแล้วไม่ต้องเก็บร่างอีก
+  // ★ SM-D57: ติ๊ก "จดจำเครื่องนี้" แล้วได้ token → เก็บไว้ในเครื่อง (จดจำได้ทีละ 1 คนต่อเครื่อง — คนเดิมถูกแทนที่)
+  if(data && data.requester_token){
+    const old = REQ_SESS;
+    reqSessSave({ token: data.requester_token, email: FORM.fields.requester_email, name: FORM.fields.requester_name || '',
+                  department: FORM.fields.department || '', expires_at: data.requester_token_expires_at || '' });
+    if(old && old.token && old.token !== data.requester_token) api('requesterLogout', { requester_token: old.token }).catch(()=>{});
+    if(!AUTH.user) buildBars();
+  }
   FORM.step = 3;
   render();
 }
@@ -1144,6 +1597,8 @@ async function formConfirmOtp(){
   const btn = $('btnConfirm');
   btn.disabled = true; btn.innerHTML = '<span class="spin"></span>กำลังส่งคำขอ...';
   FORM.otp = otp;   // ★ SM-D49: เก็บไว้ใช้ตอนกด "ยื่นคำขอต่อ" (ตอนนั้นช่อง OTP ถูกกล่องประเมินบังอยู่)
+  FORM.viaToken = false;
+  FORM.remember = !!($('fRemember') && $('fRemember').checked);   // ★ SM-D57 (เก็บไว้ใช้ตอน "ยื่นคำขอต่อ" หลังประเมินด้วย)
   try{
     const data = await api('submitTicket', buildTicketPayload(otp));
     // 🚨 SM-D49: ต้องเช็ก data.gate ก่อนทุกอย่าง — ไม่งั้นจะขึ้นจอ "สำเร็จ" ที่ไม่มีเลขที่คำขอ
@@ -1204,15 +1659,18 @@ function gateModalHtml(){
   return `<div class="mh"><h3>⭐ ประเมินก่อนยื่นคำขอใหม่</h3><button class="mx" onclick="closeM()" aria-label="ปิด">✕</button></div>
   <div class="mb">
     <div class="msg warn">ท่านมีงานที่ปิดแล้วแต่ยังไม่ได้ประเมิน <b>${total} รายการ</b> — ประเมินให้ครบเพื่อยื่นคำขอใหม่ต่อได้เลย (รายการละไม่ถึงครึ่งนาที)</div>
-    <div class="msg info">⏳ <b>อย่าเพิ่งปิดหน้าต่างนี้จนกว่าจะกด "ดำเนินการยื่นคำขอรับบริการต่อ"</b><br>
-      ถ้าปิดไป ข้อมูลที่กรอกไว้ยังอยู่ แต่ต้องขอรหัส OTP ใหม่ และเลือกไฟล์แนบใหม่</div>
+    ${FORM.viaToken
+      ? `<div class="msg info">⏳ <b>อย่าเพิ่งปิดหน้าต่างนี้จนกว่าจะกด "ดำเนินการยื่นคำขอรับบริการต่อ"</b><br>
+      เครื่องนี้จดจำท่านไว้แล้ว ไม่ต้องใช้รหัส OTP · ถ้าปิดไป ข้อมูลที่กรอกไว้ยังอยู่ แต่ต้องเลือกไฟล์แนบใหม่</div>`
+      : `<div class="msg info">⏳ <b>อย่าเพิ่งปิดหน้าต่างนี้จนกว่าจะกด "ดำเนินการยื่นคำขอรับบริการต่อ"</b><br>
+      ถ้าปิดไป ข้อมูลที่กรอกไว้ยังอยู่ แต่ต้องขอรหัส OTP ใหม่ และเลือกไฟล์แนบใหม่</div>`}
     <p style="font-weight:600;margin:10px 0 4px">ประเมินแล้ว ${done} / ${total} รายการ</p>
     ${items}
     <div class="msg err" id="gErr" style="display:none"></div>
     <button class="btn primary big" id="gBtn" ${gateAllDone()?'':'disabled'} onclick="gateContinue()">
       ${gateAllDone()?'✅ ดำเนินการยื่นคำขอรับบริการต่อ':`ดำเนินการยื่นคำขอรับบริการต่อ (เหลืออีก ${total-done} รายการ)`}
     </button>
-    <div class="help" style="margin-top:8px">รหัส OTP หมดอายุ? <a href="#" onclick="return gateResendOtp()">ขอรหัสใหม่</a> แล้วปิดหน้าต่างนี้เพื่อกรอกรหัสใหม่</div>
+    ${FORM.viaToken ? '' : `<div class="help" style="margin-top:8px">รหัส OTP หมดอายุ? <a href="#" onclick="return gateResendOtp()">ขอรหัสใหม่</a> แล้วปิดหน้าต่างนี้เพื่อกรอกรหัสใหม่</div>`}
   </div>`;
 }
 
@@ -1267,6 +1725,12 @@ async function gateContinue(){
     closeM();
     finishSubmit(data);
   }catch(err){
+    if(isReqTokenErr(err)){
+      // ★ SM-D57: การจดจำเครื่องหมดอายุระหว่างประเมิน → คะแนนบันทึกไปแล้ว · ไปทาง OTP ตามปกติให้เอง
+      closeM(); reqSessClear(); buildBars(); FORM.viaToken = false; render();
+      toast((err.msg || 'เครื่องนี้ใช้การจดจำไม่ได้แล้ว') + ' (คะแนนที่ประเมินแล้วบันทึกเรียบร้อย)');
+      return formSubmitStep1();
+    }
     if(btn){ btn.disabled = false; btn.textContent = '✅ ดำเนินการยื่นคำขอรับบริการต่อ'; }
     const expired = err && (err.error === 'NO_OTP' || err.error === 'EXPIRED');
     if(errB){
@@ -1297,7 +1761,8 @@ function trackV(){
     <div class="field" style="margin:0"><label class="fl" for="tkEmail">อีเมลผู้แจ้ง</label><input type="email" id="tkEmail" value="${esc(TRACK.em||'')}" placeholder="you@yru.ac.th"></div>
   </div>
   <div style="margin-top:12px"><button class="btn primary" onclick="doTrack()">🔎 ค้นหา</button> <button class="btn ghost" onclick="openM(recoverModal())">📧 ลืมเลขคำขอ</button></div></div>
-  <div id="trackResult"></div>`;
+  <div id="trackResult"></div>
+  <div id="myReqBox"></div>`;
 }
 function trackAfter(){
   const p = qsp();
@@ -1310,6 +1775,7 @@ function trackAfter(){
     TRACK.autoRating = (r >= 1 && r <= 5) ? r : 0;
     doTrack();
   }
+  renderMyReqBox();   // ★ S27
 }
 async function doTrack(){
   const no = $('tkNo') ? $('tkNo').value.trim() : '';
@@ -1360,10 +1826,12 @@ function timelineHtml(tl){
   if(!tl.length) return `<p class="help">ยังไม่มีประวัติการดำเนินการ</p>`;
   return `<ul class="tl">${tl.map(x=>`<li><span class="d ${TL_DOT[x.action]||'g'}"></span><div class="tt">${esc(x.action_label||x.action||'')}</div><div class="tm">${fmtDate(x.timestamp,true)}${x.by_name?' · '+esc(x.by_name):''}${x.note?' · '+esc(x.note):''}</div></li>`).join('')}</ul>`;
 }
+/* ★ SM-D55: ป้ายช่วงที่แนบไฟล์เป็นภาษาไทย (เดิมโชว์รหัสอังกฤษ intake/close) */
+const STAGE_LABEL = { intake:'แนบตอนยื่น', revision:'แนบตอนแก้ไข', progress:'ระหว่างดำเนินการ', close:'หลักฐานปิดงาน' };
 function attachHtml(as){
   if(!as.length) return '';
   return `<h4 style="margin:14px 0 6px;font-size:15px">📎 เอกสารแนบ (${as.length})</h4>` +
-    as.map(a=>`<a class="fileitem dl" href="${esc(a.drive_url||'#')}" target="_blank" rel="noopener">📄 <span class="fn">${esc(a.file_name||'ไฟล์')}</span> <span style="color:var(--ink3)">${a.size_bytes?fmtBytes(a.size_bytes):''}${a.stage?' · '+esc(a.stage):''}</span></a>`).join('');
+    as.map(a=>`<a class="fileitem dl" href="${esc(a.drive_url||'#')}" target="_blank" rel="noopener">${a.stage==='close'?'✅':'📄'} <span class="fn">${esc(a.file_name||'ไฟล์')}</span> <span style="color:var(--ink3)">${a.size_bytes?fmtBytes(a.size_bytes):''}${a.stage?' · '+esc(STAGE_LABEL[a.stage]||a.stage):''}</span></a>`).join('');
 }
 function closedBox(t, canRate){
   return `${t.closing_note?`<div class="msg ok">✅ <b>สรุปการปิดงาน:</b> ${esc(t.closing_note)}</div>`:'<div class="msg ok">✅ คำขอนี้ปิดงานเรียบร้อยแล้ว</div>'}${canRate?`<div style="margin-top:10px"><button class="btn primary sm" onclick="openSurvey()">⭐ ประเมินความพึงพอใจ</button></div>`:''}`;
@@ -1493,6 +1961,175 @@ async function submitRecover(){
 }
 
 /* ============================================================
+   ★ S27 — "คำขอทั้งหมดของฉัน" (หน้าติดตาม)
+   · มี token "จดจำเครื่องนี้" → โหลดรายการให้เลย · ไม่มี → ยืนยันด้วยรหัส OTP ก่อน (ติ๊กจดจำเครื่องได้ในกล่องเดียวกัน)
+   · ปุ่มต่อรายการ: ดูรายละเอียด (หน้าติดตามเดิม) · ประเมิน (ถ้ายังไม่ประเมิน) · ใช้เป็นแม่แบบยื่นใหม่
+   · ไม่ติ๊กจดจำ → รายการอยู่แค่ในหน้าจอนี้ (ไม่เก็บในเครื่อง) ปิด/รีเฟรชหน้าแล้วหาย
+   ============================================================ */
+let MYREQ = { data:null, loading:false, err:'' };
+let RLOGIN = { step:1, email:'', resendLeft:0, timer:null };
+
+function renderMyReqBox(){
+  const box = $('myReqBox'); if(!box) return;
+  if(REQ_SESS && !MYREQ.data && !MYREQ.loading && !MYREQ.err){ loadMyRequests(); }
+  box.innerHTML = myReqBoxHtml();
+}
+function myReqBoxHtml(){
+  const d = MYREQ.data;
+  if(!d && !REQ_SESS){
+    return `<div class="panel" style="margin-top:14px"><h3 style="font-size:15px">📋 คำขอทั้งหมดของฉัน</h3>
+      <p style="font-size:13px;color:var(--ink2);margin:6px 0 10px">ดูประวัติคำขอทั้งหมดที่ท่านเคยยื่น พร้อมปุ่ม <b>"ใช้เป็นแม่แบบ"</b> เพื่อยื่นเรื่องคล้ายเดิมได้เร็วขึ้น — ยืนยันตัวตนด้วยรหัส OTP ทางอีเมล 1 ครั้ง</p>
+      <button class="btn primary" id="myReqLoginBtn" onclick="openReqLogin()">📋 ดูคำขอทั้งหมดของฉัน</button></div>`;
+  }
+  const who = d ? d.requester : { name: REQ_SESS.name, email: REQ_SESS.email };
+  const remembered = REQ_SESS && sameEmail(REQ_SESS.email, who.email);
+  const head = `<div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap"><h3 style="font-size:15px;margin-right:auto">📋 คำขอทั้งหมดของฉัน</h3>
+      <button class="btn ghost sm" onclick="reloadMyRequests()">↻ โหลดใหม่</button>
+      ${remembered ? `<button class="btn ghost sm" onclick="reqForget()">ไม่ใช่ฉัน / ออกจากเครื่องนี้</button>` : `<button class="btn ghost sm" onclick="closeMyRequests()">ปิดรายการ</button>`}</div>
+    <p class="help" style="margin-top:4px">ในนาม <b>${esc(who.name || who.email)}</b> (${esc(who.email)})${remembered ? ` · เครื่องนี้จดจำไว้ถึง ${fmtDate(REQ_SESS.expires_at)}` : ' · ยืนยันด้วยรหัส OTP (เครื่องนี้ไม่ได้จดจำท่านไว้)'}</p>`;
+  let body;
+  if(MYREQ.loading) body = `<p class="statecard" style="padding:10px"><span class="dots">กำลังโหลดรายการคำขอ</span></p>`;
+  else if(MYREQ.err) body = `<div class="msg err">${esc(MYREQ.err)}</div>`;
+  else body = myReqListHtml(d);
+  return `<div class="panel" style="margin-top:14px">${head}${body}</div>`;
+}
+function myReqListHtml(d){
+  const rows = (d && d.requests) || [];
+  if(!rows.length) return `<p class="help">ยังไม่มีคำขอที่ยื่นด้วยอีเมลนี้</p>`;
+  return rows.map(t => `<div class="myreq">
+      <div class="mr-top"><b>${esc(t.ticket_no)}</b> ${badge(t.status)}<span class="mr-date">ยื่น ${fmtDate(t.created_at)}</span></div>
+      <div class="mr-subj">${esc(t.subject)}</div>
+      <div class="mr-meta">${esc(t.type)}${t.subtype ? ' › ' + esc(t.subtype) : ''}${t.assignee_name ? ' · ผู้รับผิดชอบ ' + esc(t.assignee_name) : ''}</div>
+      <div class="mr-act"><button class="btn ghost sm" onclick="myReqOpen('${esc(t.ticket_no)}')">🔎 ดูรายละเอียด</button>${t.can_rate ? `<button class="btn ghost sm" onclick="myReqOpen('${esc(t.ticket_no)}', true)">⭐ ประเมิน</button>` : ''}<button class="btn ghost sm" onclick="myReqTemplate('${esc(t.ticket_no)}')">📝 ใช้เป็นแม่แบบ</button></div>
+    </div>`).join('')
+    + (d.total > d.shown ? `<p class="help">แสดง ${d.shown} รายการล่าสุด จากทั้งหมด ${d.total} รายการ</p>` : '');
+}
+async function loadMyRequests(){
+  if(!REQ_SESS) return;
+  MYREQ.loading = true; MYREQ.err = '';
+  if($('myReqBox')) $('myReqBox').innerHTML = myReqBoxHtml();
+  try{
+    MYREQ.data = await api('myRequests', { requester_token: REQ_SESS.token });
+  }catch(err){
+    if(isReqTokenErr(err)){ reqSessClear(); MYREQ = { data:null, loading:false, err:'' }; if(!AUTH.user) buildBars(); toast(err.msg || 'เครื่องนี้ใช้การจดจำไม่ได้แล้ว'); }
+    else MYREQ.err = (err && err.msg) || 'โหลดรายการไม่สำเร็จ';
+  }
+  MYREQ.loading = false;
+  if($('myReqBox')) $('myReqBox').innerHTML = myReqBoxHtml();
+}
+function reloadMyRequests(){
+  // 🚨 รายการบนจออาจเป็นของ "อีกคน" ที่ยืนยันด้วย OTP บนเครื่องที่จดจำคนอื่นไว้
+  //    → ใช้ token ได้เฉพาะเมื่อรายการบนจอเป็นของคนที่เครื่องจดจำไว้ ไม่งั้นกดโหลดใหม่แล้วจะได้รายการของอีกคน
+  const shown = MYREQ.data && MYREQ.data.requester && MYREQ.data.requester.email;
+  if(REQ_SESS && (!shown || sameEmail(REQ_SESS.email, shown))){ MYREQ.data = null; MYREQ.err = ''; loadMyRequests(); }
+  else openReqLogin();                              // ไม่ได้จดจำคนนี้ไว้ → ต้องยืนยัน OTP ใหม่ (รายการไม่ได้เก็บไว้ในเครื่อง)
+}
+function closeMyRequests(){ MYREQ = { data:null, loading:false, err:'' }; renderMyReqBox(); }
+
+/* ---- กล่องยืนยันตัวตนด้วย OTP (purpose แยก: requester_login — ใช้ยื่นคำขอไม่ได้) ---- */
+function openReqLogin(){
+  stopReqLoginResend();
+  const tk = $('tkEmail') ? $('tkEmail').value.trim() : '';
+  RLOGIN = { step:1, email: RLOGIN.email || tk || '', resendLeft:0, timer:null };
+  openM(reqLoginModalHtml());
+  const el = $('rlEmail'); if(el) el.focus();
+}
+function reqLoginModalHtml(){
+  if(RLOGIN.step === 1){
+    return `<div class="mh"><h3>📋 คำขอทั้งหมดของฉัน</h3><button class="mx" onclick="closeReqLogin()" aria-label="ปิด">✕</button></div>
+    <div class="mb"><p>กรอกอีเมลที่ท่านใช้ยื่นคำขอ ระบบจะส่ง<b>รหัสยืนยัน 6 หลัก</b>ไปที่อีเมลนั้น เพื่อยืนยันว่าเป็นท่านเอง</p>
+    <div class="field"><label class="fl" for="rlEmail">อีเมลของท่าน</label><input type="email" id="rlEmail" value="${esc(RLOGIN.email)}" placeholder="you@yru.ac.th">
+      <div class="help">ใส่<b>ที่อยู่อีเมล</b> (เช่น somchai.s@yru.ac.th) — <b>ไม่ใช่</b>ชื่อ-นามสกุล และ<b>ไม่ใช่</b>เลขที่คำขอ</div></div>
+    <div class="msg err" id="rlErr" style="display:none"></div>
+    <button class="btn primary" id="rlBtn" onclick="reqLoginRequest()">ส่งรหัสยืนยันทางอีเมล</button></div>`;
+  }
+  return `<div class="mh"><h3>📋 ยืนยันรหัส</h3><button class="mx" onclick="closeReqLogin()" aria-label="ปิด">✕</button></div>
+  <div class="mb" style="text-align:center"><p>ระบบส่งรหัส 6 หลักไปที่ <b style="color:var(--green)">${esc(maskEmailC(RLOGIN.email))}</b> แล้ว</p>
+  <div class="otp-row" id="rlOtpRow">${[0,1,2,3,4,5].map(i=>`<input maxlength="1" inputmode="numeric" autocomplete="one-time-code" aria-label="รหัสหลักที่ ${i+1}" data-i="${i}">`).join('')}</div>
+  <div class="help">ไม่ได้รับรหัส? <a href="#" id="rlResend" onclick="return reqLoginResend()">ส่งใหม่อีกครั้ง</a></div>
+  ${rememberBoxHtml('rlRemember', false)}
+  <div class="msg err" id="rlErr" style="display:none;text-align:left"></div>
+  <div style="margin-top:14px;display:flex;gap:8px;justify-content:center;flex-wrap:wrap">
+    <button class="btn ghost" onclick="reqLoginBack()">← เปลี่ยนอีเมล</button>
+    <button class="btn primary" id="rlBtn" onclick="reqLoginVerify()">ยืนยันและดูรายการ</button></div></div>`;
+}
+function rlErr(msg){ const e = $('rlErr'); if(e){ e.style.display=''; e.textContent = msg; } }
+function closeReqLogin(){ stopReqLoginResend(); closeM(); }
+function reqLoginBack(){ stopReqLoginResend(); RLOGIN.step = 1; openM(reqLoginModalHtml()); }
+async function reqLoginRequest(){
+  const em = $('rlEmail') ? $('rlEmail').value.trim() : '';
+  if(!em || em.indexOf('@') < 1){ rlErr('กรุณากรอกอีเมลให้ถูกต้อง (เช่น somchai.s@yru.ac.th)'); return; }
+  const btn = $('rlBtn'); btn.disabled = true; btn.innerHTML = '<span class="spin"></span>กำลังส่งรหัส...';
+  try{
+    await api('requestRequesterLoginOtp', { email: em });
+    RLOGIN.email = em; RLOGIN.step = 2;
+    openM(reqLoginModalHtml()); wireOtp('#rlOtpRow'); startReqLoginResend();
+  }catch(err){ btn.disabled = false; btn.textContent = 'ส่งรหัสยืนยันทางอีเมล'; rlErr((err && err.msg) || 'ส่งรหัสไม่สำเร็จ'); }
+}
+async function reqLoginVerify(){
+  const otp = gatherOtp('#rlOtpRow');
+  if(otp.length < 6){ rlErr('กรุณากรอกรหัสให้ครบ 6 หลัก'); return; }
+  const remember = !!($('rlRemember') && $('rlRemember').checked);
+  const btn = $('rlBtn'); btn.disabled = true; btn.innerHTML = '<span class="spin"></span>กำลังตรวจรหัส...';
+  try{
+    const d = await api('requesterLogin', { email: RLOGIN.email, otp: otp, remember: remember });
+    if(d.requester_token){
+      const old = REQ_SESS;
+      reqSessSave({ token: d.requester_token, email: d.requester.email, name: d.requester.name || '', department: d.requester.department || '', expires_at: d.requester_token_expires_at || '' });
+      if(old && old.token && old.token !== d.requester_token) api('requesterLogout', { requester_token: old.token }).catch(()=>{});
+      if(!AUTH.user) buildBars();
+    }
+    MYREQ = { data: d, loading:false, err:'' };
+    closeReqLogin();
+    renderMyReqBox();
+    toast(d.remember_failed ? 'เข้าดูรายการได้แล้ว แต่จดจำเครื่องนี้ไม่สำเร็จ' : (d.requester_token ? 'จดจำเครื่องนี้แล้ว' : 'ยืนยันตัวตนสำเร็จ'));
+  }catch(err){ btn.disabled = false; btn.textContent = 'ยืนยันและดูรายการ'; rlErr((err && err.msg) || 'ยืนยันรหัสไม่สำเร็จ'); }
+}
+function startReqLoginResend(){ stopReqLoginResend(); RLOGIN.resendLeft = 60; updReqLoginResend(); RLOGIN.timer = setInterval(()=>{ RLOGIN.resendLeft--; if(RLOGIN.resendLeft <= 0) stopReqLoginResend(); updReqLoginResend(); }, 1000); }
+function stopReqLoginResend(){ if(RLOGIN.timer){ clearInterval(RLOGIN.timer); RLOGIN.timer = null; } }
+function updReqLoginResend(){ const a = $('rlResend'); if(!a) return; if(RLOGIN.resendLeft > 0){ a.textContent = `ส่งใหม่อีกครั้ง (0:${String(RLOGIN.resendLeft).padStart(2,'0')})`; a.style.opacity='.5'; a.style.pointerEvents='none'; } else { a.textContent = 'ส่งรหัสใหม่'; a.style.opacity='1'; a.style.pointerEvents='auto'; } }
+async function reqLoginResend(){
+  if(RLOGIN.resendLeft > 0) return false;
+  try{ await api('requestRequesterLoginOtp', { email: RLOGIN.email }); toast('ส่งรหัสใหม่แล้ว'); startReqLoginResend(); }
+  catch(err){ toast((err && err.msg) || 'ส่งรหัสใหม่ไม่สำเร็จ'); }
+  return false;
+}
+
+/* ---- ปุ่มต่อรายการ ---- */
+function myReqOpen(no, rate){
+  const d = MYREQ.data; const em = d ? d.requester.email : (REQ_SESS ? REQ_SESS.email : '');
+  if($('tkNo')) $('tkNo').value = no;
+  if($('tkEmail')) $('tkEmail').value = em;
+  TRACK.autoSurvey = !!rate; TRACK.autoRating = 0;
+  doTrack().then(()=>{ const r = $('trackResult'); if(r && r.scrollIntoView) r.scrollIntoView({ behavior:'smooth', block:'start' }); });
+}
+/* ★ S27 — "ใช้เป็นแม่แบบ": เปิดฟอร์มยื่นใหม่พร้อมข้อมูลจากคำขอเดิม (เรื่อง/ประเภท/ประเภทย่อย/รายละเอียด/หมายเหตุ)
+   ⚠️ ไม่คัดลอก: กำหนดส่ง (ต้องเลือกใหม่) · ไฟล์แนบ (ต้องแนบใหม่) · ใบเดิมไม่ถูกแก้ไข — ยื่นแล้วได้คำขอใบใหม่เลขใหม่ */
+function myReqTemplate(no){
+  const d = MYREQ.data; if(!d) return;
+  const t = (d.requests || []).find(x => x.ticket_no === no); if(!t) return;
+  const f = { requester_email: d.requester.email, requester_name: d.requester.name || '', department: d.requester.department || '' };
+  const i = reqIdxByEmail(f.requester_email);
+  if(i >= 0){ f.reqIdx = String(i); f.requester_name = REQUESTERS[i].name || f.requester_name; f.department = REQUESTERS[i].department || f.department; }
+  let note = String(t.note || '');
+  if(TYPES[t.type]) f.type = t.type;                     // ประเภทที่ถูกปิดใช้ไปแล้ว → ไม่เติม (ให้เลือกใหม่)
+  // "งานอื่น ๆ": ระบบเก็บคำที่ระบุไว้หน้ารายละเอียดเป็น "[ประเภทที่ระบุ: ...]" (submitTicket) → แยกกลับเข้าช่องเดิม
+  const m = /^\[ประเภทที่ระบุ: ([^\]]*)\]\n?/.exec(note);
+  if(m && f.type && f.type.indexOf('อื่น') > -1){ f.type_other = m[1]; note = note.slice(m[0].length); }
+  // ประเภทย่อย "อื่น ๆ": ระบบเก็บคำที่ระบุแทนประเภทย่อย → ถ้าไม่ใช่ตัวเลือกในรายการ ให้กลับเป็น "อื่น ๆ" + ช่องระบุ
+  const subs = (f.type && TYPES[f.type]) || [];
+  if(t.subtype){
+    if(subs.indexOf(t.subtype) > -1) f.subtype = t.subtype;
+    else { const oth = subs.find(s => s.indexOf('อื่น') > -1); if(oth){ f.subtype = oth; f.subtype_other = t.subtype; } }
+  }
+  f.subject = t.subject || ''; f.note = note; f.remark = t.remark || ''; f.deadline = '';
+  stopResendTimer();
+  FORM = newForm(); FORM.draftChecked = true; FORM.fields = f; FORM.templateFrom = no;
+  saveDraft();
+  go('form');
+}
+
+/* ============================================================
    8) โหลด config + boot
    ============================================================ */
 async function loadConfig(){
@@ -1527,9 +2164,11 @@ function boot(){
   if(API_URL === API_PLACEHOLDER){
     showBanner('⚠️ ยังไม่ได้ตั้งค่า API_URL — ผู้ดูแลต้องวาง /exec URL ในไฟล์ app.js ก่อน (ดูขั้นตอนใน README_Phase2_WP2.md)');
   }
+  REQ_SESS = reqSessLoad();   // ★ SM-D57: อ่านก่อนวาดหน้าแรก (ตรวจกับเซิร์ฟเวอร์ทีหลังแบบเงียบ ๆ)
   renderFromUrl();   // แสดง shell ทันที (หน้า home เปิดดูได้แม้ backend ยังไม่ deploy)
   loadConfig();      // แล้วโหลด config/requesters/types (async — ไม่บล็อกการแสดงผล)
   restoreSession();  // กู้ session เจ้าหน้าที่ถ้ามี token เดิม (async)
+  restoreRequesterSession();   // ★ SM-D57: ตรวจ token "จดจำเครื่องนี้" ของผู้แจ้ง (async)
 }
 boot();   // index.html โหลด app.js แบบ defer → DOM พร้อมแล้ว เรียก boot ได้เลย
 

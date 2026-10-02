@@ -56,6 +56,42 @@ a:hover{text-decoration:underline}
 .rolepill{background:var(--greens);color:var(--green);font-weight:700;padding:3px 11px;border-radius:999px;font-size:12px}
 .linkbtn{background:transparent;border:1px solid var(--line);color:var(--ink2);padding:5px 12px;border-radius:9px;cursor:pointer;font-size:12.5px;font-family:inherit}
 .linkbtn:hover{color:var(--green);border-color:var(--green2)}
+/* ★ S32 (ps3 · 30 ก.ย. 69) — ส่วนหัวไม่ตกบรรทัด · มือถือกะทัดรัด · โลโก้เห็นชัดในโหมดมืด
+   จัดวางอย่างเดียว — ไม่แตะค่าตัวแปรสี/ฟอนต์ (SM-D26)
+   - เมนูไม่แตกทีละปุ่มอีก: วางคู่ชื่อระบบไม่พอเมื่อไร ทั้งแถบเมนูจะลงบรรทัดใหม่พร้อมกัน
+   - ชื่อ/คำบรรยายยาวเกินที่ว่าง → ตัดด้วย … (ชี้เมาส์ดูเต็มได้ ผ่าน title ใน buildBars) */
+.topbar .wrap{flex-wrap:wrap;row-gap:10px}
+.topbar .spacer{display:none}
+.brand{min-width:0;flex:1 1 320px}
+.btxt{min-width:0}
+.btxt b,.btxt span{display:block;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.tabs{flex-wrap:nowrap;flex:0 0 auto}
+.linkbtn.mode{font-size:14px;line-height:1.2;padding:4px 10px}
+#mBtn{margin-left:auto}
+html[data-theme="dark"] .logo-img{background:#fff;border-radius:10px;padding:3px 7px}
+@media(max-width:760px){
+  .topbar{position:static}
+  .topbar .wrap{padding:9px 14px;gap:8px 10px}
+  .logo-img{height:34px}
+  .btxt b{font-size:16px}
+  .btxt span{display:none}
+  .tabs{flex:1 1 100%;overflow-x:auto;scrollbar-width:none}
+  .tabs::-webkit-scrollbar{display:none}
+  .tab{flex:0 0 auto;white-space:nowrap;padding:8px 11px}
+  .userbar .wrap{padding:7px 14px;flex-wrap:nowrap}
+  .who{flex-wrap:nowrap;min-width:0}
+  .who-note{display:none}
+}
+/* ★ S28/D44/S24 ตารางในรายงานประจำปีงบ + ★ SM-D43 แถวมอบหมายเร็วในการ์ดคิว (ใช้ตัวแปรธีมเดิม — ไม่แตะ design tokens) */
+.rtable{font-size:13px}
+.rtable .rt-h,.rtable .rt-r{display:grid;grid-template-columns:minmax(0,1.6fr) repeat(3,minmax(0,1fr));gap:8px;padding:7px 0;border-bottom:1px dashed var(--line);align-items:center}
+.rtable.c3 .rt-h,.rtable.c3 .rt-r{grid-template-columns:minmax(0,1.6fr) repeat(2,minmax(0,1fr))}
+.rtable .rt-h{font-weight:600;color:var(--ink3);font-size:12px}
+.rtable .rt-r:last-child{border-bottom:none}
+.rtable .rt-h span:not(:first-child),.rtable .rt-r span:not(:first-child){text-align:right}
+.rtable .rt-r span:first-child{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.qassign{display:flex;gap:6px;margin-top:8px;flex-wrap:wrap;align-items:center}
+.qassign select{flex:1 1 190px;width:auto;min-width:0;padding:7px 10px;font-size:13px}
 
 /* ---- แบนเนอร์แจ้งเตือนระดับหน้า (เช่น ยังไม่ตั้ง API_URL) ---- */
 .app-banner{background:var(--ambers);color:var(--amber-tx);border-bottom:1px solid var(--greens-line);font-size:13px;font-weight:600;text-align:center;padding:9px 16px}
@@ -229,3 +265,25 @@ html[data-theme=dark] .pbar i{background:linear-gradient(90deg,#b8f09e,#4ade80)}
 .gitem .stars{margin:6px 0 2px}
 .gitem .stars span{font-size:26px}
 .gitem textarea{width:100%;min-height:54px;margin-top:6px}
+
+/* ---- ★ SM-D57 ผู้แจ้ง "จดจำเครื่องนี้" + ★ S27 "คำขอทั้งหมดของฉัน" ---- */
+.remember{display:flex;gap:8px;align-items:flex-start;justify-content:center;margin:14px auto 0;max-width:470px;font-size:13.5px;text-align:left;cursor:pointer;line-height:1.5}
+.remember input{width:18px;height:18px;padding:0;margin:2px 0 0;flex:none;accent-color:var(--green);box-shadow:none}
+.remember input:focus-visible{outline:2px solid var(--green2);outline-offset:2px}
+.remember-help{max-width:470px;margin:4px auto 0;text-align:left}
+.myreq{border-top:1px dashed var(--line);padding:12px 0}
+.myreq .mr-top{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+.myreq .mr-date{margin-left:auto;font-size:12px;color:var(--ink3)}
+.myreq .mr-subj{font-weight:600;margin:6px 0 2px;overflow-wrap:anywhere}
+.myreq .mr-meta{font-size:12px;color:var(--ink3);overflow-wrap:anywhere}
+.myreq .mr-act{display:flex;gap:6px;flex-wrap:wrap;margin-top:8px}
+
+/* ---- ★ S34 (พบตอนตรวจชุด ④ บนจอมือถือ 375px): แถวช่องรหัส OTP 6 ช่องกว้างตายตัว 316px แต่พื้นที่ในแผงมีแค่ ~291px
+        → หน้าเว็บกว้างเกินจอ ขอบขวาถูกตัด (โดนทั้งหน้ายื่นคำขอ · เข้าระบบเจ้าหน้าที่ · กล่องคำขอของฉัน)
+        แก้เฉพาะจอแคบ: ให้ช่องหดได้ · จอกว้างกว่า 420px เหมือนเดิมทุกพิกเซล
+        ⚠️ ต้องเป็น width:0 (ไม่ใช่ auto): แผงถูกขยายตาม "ความกว้างขั้นต่ำ" ของเนื้อใน — auto ทำให้ขั้นต่ำยังเป็น 46px/ช่อง
+           แผงจึงยังล้น 15px (วัดจริงแล้ว) · width:0 + flex ขยายเต็มพื้นที่ที่มี (สูงสุด 46px เท่าเดิม) ---- */
+@media(max-width:420px){
+  .otp-row{gap:6px}
+  .otp-row input{flex:1 1 0;width:0;min-width:0;max-width:46px;height:50px;padding:0;font-size:20px}
+}
