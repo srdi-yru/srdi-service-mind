@@ -13,7 +13,7 @@ const API_URL = 'https://script.google.com/macros/s/AKfycbwPaN1CtgAOKD4tK6WPPT8d
 
 /* --- ค่าคงที่ระบบ --- */
 const API_PLACEHOLDER = 'PASTE_WEBAPP_EXEC_URL_HERE';
-const API_TIMEOUT_MS = 60000;               // หมดเวลาเชื่อมต่อ 60 วินาที (ตรงกับ mockup)
+const API_TIMEOUT_MS = 120000;               // หมดเวลาเชื่อมต่อ 120 วินาที (ปรับแก้วันที่ 7 ตุลาคม 69 ด้วยตนเอง)
 const TABS = [
   { id:'home',  t:'หน้าหลัก' },
   { id:'form',  t:'📝 ยื่นคำขอ', cta:1 },
@@ -47,7 +47,7 @@ async function api(action, params){
     clearTimeout(timer);
     const aborted = e && e.name === 'AbortError';
     throw { error: aborted ? 'TIMEOUT' : 'NETWORK',
-            msg: aborted ? 'หมดเวลาเชื่อมต่อ (60 วินาที) — กรุณาลองใหม่'
+            msg: aborted ? 'หมดเวลาเชื่อมต่อ (120 วินาที) — กรุณาลองใหม่'
                          : 'เชื่อมต่อเซิร์ฟเวอร์ไม่ได้ — ตรวจอินเทอร์เน็ตแล้วลองใหม่' };
   }
   clearTimeout(timer);
